@@ -1,0 +1,106 @@
+/* Gaya untuk semua halaman */
+:root {
+    --primary-color: #2C3E50;
+    --secondary-color: #1ABC9C;
+    --accent-color: #3498DB;
+    --danger-color: #E74C3C;
+    --success-color: #27AE60;
+    --warning-color: #F39C12;
+    --light-color: #ECF0F1;
+    --dark-color: #2C3E50;
+}
+
+/* Layout */
+.sb-sidenav {
+    background-color: var(--primary-color);
+}
+
+.sb-sidenav-dark .sb-sidenav-menu .nav-link.active {
+    background-color: var(--secondary-color);
+    color: #fff;
+}
+
+.sb-topnav {
+    background-color: var(--primary-color) !important;
+}
+
+/* Form styles */
+.btn-primary {
+    background-color: var(--accent-color);
+    border-color: var(--accent-color);
+}
+
+.btn-primary:hover {
+    background-color: #2980B9;
+    border-color: #2980B9;
+}
+
+.btn-success {
+    background-color: var(--success-color);
+    border-color: var(--success-color);
+}
+
+.btn-danger {
+    background-color: var(--danger-color);
+    border-color: var(--danger-color);
+}
+
+.card-header {
+    background-color: var(--light-color);
+    border-bottom: 1px solid rgba(0,0,0,.125);
+    padding: 0.75rem 1.25rem;
+    font-weight: 500;
+}
+
+/* Dashboard */
+.card {
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+}
+
+.card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 15px rgba(0, 0, 0, 0.2);
+}
+
+.card .card-body {
+    padding: 1.5rem;
+}
+
+/* Table styling */
+.table {
+    width: 100%;
+    margin-bottom: 1rem;
+    color: #212529;
+}
+
+.table th {
+    background-color: var(--light-color);
+    border-top: 1px solid #dee2e6;
+}
+
+.table-bordered {
+    border: 1px solid #dee2e6;
+}
+
+/* Login/Register pages */
+.auth-card {
+    max-width: 450px;
+    margin: 0 auto;
+    margin-top: 100px;
+}
+
+.auth-logo {
+    max-width: 150px;
+    margin: 0 auto;
+    display: block;
+    margin-bottom: 20px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .card {
+        margin-bottom: 15px;
+    }
+}
