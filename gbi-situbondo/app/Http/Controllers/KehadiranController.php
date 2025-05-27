@@ -66,9 +66,10 @@ class KehadiranController extends Controller
 
     public function store(Request $request)
     {
+        // Updated validation - allow empty anggota array
         $validator = Validator::make($request->all(), [
             'id_pelaksanaan' => 'required|exists:pelaksanaan_kegiatan,id_pelaksanaan',
-            'anggota' => 'required|array',
+            'anggota' => 'nullable|array', // Changed from 'required' to 'nullable'
             'anggota.*' => 'exists:anggota,id_anggota',
         ]);
 
@@ -81,22 +82,31 @@ class KehadiranController extends Controller
         DB::beginTransaction();
 
         try {
-            // Delete existing attendance
+            // Get selected anggota IDs, default to empty array if none selected
+            $anggotaIds = $request->input('anggota', []);
+            
+            // Delete existing attendance for this pelaksanaan
             Kehadiran::where('id_pelaksanaan', $request->id_pelaksanaan)->delete();
             
-            // Insert new attendance
-            foreach ($request->anggota as $id_anggota) {
-                Kehadiran::create([
-                    'id_anggota' => $id_anggota,
-                    'id_pelaksanaan' => $request->id_pelaksanaan,
-                    'waktu_absensi' => Carbon::now(),
-                    'status' => 'hadir',
-                ]);
+            // Insert new attendance only if there are selected members
+            if (!empty($anggotaIds)) {
+                foreach ($anggotaIds as $id_anggota) {
+                    Kehadiran::create([
+                        'id_anggota' => $id_anggota,
+                        'id_pelaksanaan' => $request->id_pelaksanaan,
+                        'waktu_absensi' => Carbon::now(),
+                        'status' => 'hadir',
+                    ]);
+                }
+                
+                $message = 'Data kehadiran berhasil disimpan untuk ' . count($anggotaIds) . ' anggota yang hadir.';
+            } else {
+                $message = 'Data kehadiran berhasil disimpan.';
             }
             
             DB::commit();
-            return redirect()->route('kehadiran.index')
-                ->with('success', 'Data kehadiran berhasil disimpan.');
+            return redirect()->route('kehadiran.index')->with('success', $message);
+            
         } catch (\Exception $e) {
             DB::rollback();
             return redirect()->back()
@@ -131,7 +141,7 @@ class KehadiranController extends Controller
                 ->with('error', 'Tidak ada kegiatan yang dapat di-scan saat ini.');
         }
         
-            // URL untuk QR code
+        // URL untuk QR code
         $qrUrl = route('kehadiran.scan-process', $pelaksanaan->id_pelaksanaan);
             
         return view('kehadiran.scan', compact('pelaksanaan', 'qrUrl'));
