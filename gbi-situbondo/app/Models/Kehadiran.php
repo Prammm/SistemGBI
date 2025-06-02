@@ -25,4 +25,17 @@ class Kehadiran extends Model
     {
         return $this->belongsTo(PelaksanaanKegiatan::class, 'id_pelaksanaan', 'id_pelaksanaan');
     }
+
+    public function kegiatan()
+    {
+        return $this->hasOneThrough(
+            Kegiatan::class,
+            PelaksanaanKegiatan::class,
+            'id_pelaksanaan', 
+            'id_kegiatan',   
+            'id_pelaksanaan', 
+            'id_kegiatan'     
+        );
+    }
+
 }

@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\ProfileController; // Add this line
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\KomselController;
 use App\Http\Controllers\AnggotaController;
@@ -14,6 +15,7 @@ use App\Http\Controllers\KeluargaController;
 use App\Http\Controllers\PelaksanaanKegiatanController;
 use App\Http\Controllers\NotifikasiController;
 use App\Http\Controllers\PelayananController;
+use App\Http\Controllers\LaporanController;
 
 Route::get('/', function () {
     return redirect()->route('login');
@@ -25,6 +27,13 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::resource('users', UserController::class);
     Route::resource('roles', RoleController::class);
+    
+    // Profile routes - Add these lines
+    Route::get('/profile', [ProfileController::class, 'show'])->name('profile.show');
+    Route::get('/profile/edit', [ProfileController::class, 'edit'])->name('profile.edit');
+    Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::put('/profile/anggota', [ProfileController::class, 'updateAnggota'])->name('profile.update.anggota');
+    
     Route::resource('anggota', AnggotaController::class)->parameters([
         'anggota' => 'anggota'
     ]);
@@ -51,6 +60,17 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/anggota', [AnggotaController::class, 'index'])
         ->name('anggota.index')
         ->middleware(['auth', 'permission:view_anggota']);
+
+
+    Route::prefix('laporan')->name('laporan.')->middleware(['auth'])->group(function () {
+        Route::get('/', [LaporanController::class, 'index'])->name('index');
+        Route::get('/kehadiran', [LaporanController::class, 'kehadiran'])->name('kehadiran');
+        Route::get('/pelayanan', [LaporanController::class, 'pelayanan'])->name('pelayanan');
+        Route::get('/komsel', [LaporanController::class, 'komsel'])->name('komsel');
+        Route::get('/anggota', [LaporanController::class, 'anggota'])->name('anggota');
+        Route::get('/dashboard', [LaporanController::class, 'dashboard'])->name('dashboard');
+        Route::get('/export/{jenis}/{format?}', [LaporanController::class, 'export'])->name('export');
+    });
 
     Route::get('/home', [App\Http\Controllers\HomeController::class, 'index'])->name('home');
     Route::post('keluarga/{keluarga}/add-member', [KeluargaController::class, 'addMember'])->name('keluarga.add-member');

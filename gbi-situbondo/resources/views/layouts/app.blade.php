@@ -13,24 +13,96 @@
     <link href="{{ asset('css/styles.css') }}" rel="stylesheet" />
     <script src="https://use.fontawesome.com/releases/v6.3.0/js/all.js" crossorigin="anonymous"></script>
     @yield('styles')
+    
+    <style>
+        /* Navbar logo styling */
+        .navbar-brand {
+            display: flex;
+            align-items: center;
+            font-weight: 600;
+            font-size: 1.2rem;
+            color: #ffffff !important;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+        
+        .navbar-brand:hover {
+            color: #e9ecef !important;
+            text-decoration: none;
+        }
+        
+        .navbar-logo {
+            width: 32px;
+            height: 32px;
+            margin-right: 10px;
+            object-fit: contain;
+            filter: brightness(1.1) drop-shadow(0 1px 3px rgba(0,0,0,0.3));
+            transition: all 0.3s ease;
+        }
+        
+        .navbar-brand:hover .navbar-logo {
+            transform: scale(1.05);
+            filter: brightness(1.2) drop-shadow(0 2px 5px rgba(0,0,0,0.4));
+        }
+        
+        .navbar-text {
+            margin: 0;
+            line-height: 1.2;
+            letter-spacing: 0.3px;
+        }
+        
+        /* Responsive navbar logo */
+        @media (max-width: 768px) {
+            .navbar-logo {
+                width: 28px;
+                height: 28px;
+                margin-right: 8px;
+            }
+            
+            .navbar-brand {
+                font-size: 1.1rem;
+            }
+        }
+        
+        @media (max-width: 576px) {
+            .navbar-logo {
+                width: 24px;
+                height: 24px;
+                margin-right: 6px;
+            }
+            
+            .navbar-brand {
+                font-size: 1rem;
+            }
+        }
+    </style>
 </head>
 <body class="d-flex flex-column min-vh-100">
     <nav class="sb-topnav navbar navbar-expand navbar-dark bg-dark">
-        <!-- Navbar Brand-->
-        <a class="navbar-brand ps-3" href="{{ route('dashboard') }}">GBI Situbondo</a>
-        <!-- Sidebar Toggle-->
-        <button class="btn btn-link btn-sm order-1 order-lg-0 me-4 me-lg-0" id="sidebarToggle" href="#!"><i class="fas fa-bars"></i></button>
-        <!-- Navbar Search-->
+        <!-- Navbar Brand with Logo -->
+        <a class="navbar-brand ps-3" href="{{ route('dashboard') }}">
+            <img src="{{ asset('images/logo/logo.png') }}" alt="Logo GBI" class="navbar-logo">
+            <span class="navbar-text">GBI Situbondo</span>
+        </a>
         <form class="d-none d-md-inline-block form-inline ms-auto me-0 me-md-3 my-2 my-md-0">
         </form>
         <!-- Navbar-->
         <ul class="navbar-nav ms-auto ms-md-0 me-3 me-lg-4">
             <li class="nav-item dropdown">
-                <a class="nav-link dropdown-toggle" id="navbarDropdown" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false"><i class="fas fa-user fa-fw"></i></a>
+                <a class="nav-link dropdown-toggle" id="navbarDropdown" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="fas fa-user fa-fw"></i>
+                    <span class="d-none d-md-inline ms-1">{{ Auth::user()->name }}</span>
+                </a>
                 <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
                     <li>
+                        <a class="dropdown-item" href="{{ route('profile.show') }}">
+                            <i class="fas fa-user-circle me-2"></i>Profil Saya
+                        </a>
+                    </li>
+                    <li><hr class="dropdown-divider" /></li>
+                    <li>
                         <a class="dropdown-item" href="#" onclick="event.preventDefault(); document.getElementById('logout-form').submit();">
-                            Logout
+                            <i class="fas fa-sign-out-alt me-2"></i>Logout
                         </a>
                         <form id="logout-form" action="{{ route('logout') }}" method="POST" style="display: none;">
                             @csrf
@@ -129,10 +201,10 @@
                         </a>
                         @endif
                         
-                        @if(Route::has('kehadiran.laporan'))
-                        <a class="nav-link {{ request()->routeIs('kehadiran.laporan') ? 'active' : '' }}" href="{{ route('kehadiran.laporan') }}">
-                            <div class="sb-nav-link-icon"><i class="fas fa-file-alt"></i></div>
-                            Laporan Kehadiran
+                        @if(Route::has('laporan.index'))
+                        <a class="nav-link {{ request()->routeIs('laporan.*') ? 'active' : '' }}" href="{{ route('laporan.index') }}">
+                            <div class="sb-nav-link-icon"><i class="fas fa-chart-line"></i></div>
+                            Laporan
                         </a>
                         @endif
                         @endif
@@ -145,8 +217,14 @@
                             Manajemen Pengguna
                         </a>
                         @endif
-                        
 
+                        @if(Route::has('roles.index'))
+                        <a class="nav-link {{ request()->routeIs('roles.*') ? 'active' : '' }}" href="{{ route('roles.index') }}">
+                            <div class="sb-nav-link-icon"><i class="fas fa-user-tag"></i></div>
+                            Role & Permission
+                        </a>
+                        @endif
+                        
                         @endif
                     </div>
                 </div>
