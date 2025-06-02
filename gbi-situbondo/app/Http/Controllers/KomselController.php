@@ -25,7 +25,23 @@ class KomselController extends Controller
 
     public function index()
     {
-        $komsel = Komsel::withCount('anggota')->with('pemimpin')->get();
+        $user = auth()->user();
+        
+        // If admin, show all komsel
+        if ($user->id_role <= 2) {
+            $komsel = Komsel::withCount('anggota')->with('pemimpin')->get();
+        }
+        // If regular member or service staff (roles 3 and 4), only show their komsel
+        else {
+            $anggota = $user->anggota;
+            
+            if (!$anggota) {
+                $komsel = collect();
+            } else {
+                $komsel = $anggota->komsel()->withCount('anggota')->with('pemimpin')->get();
+            }
+        }
+        
         return view('komsel.index', compact('komsel'));
     }
 
@@ -107,6 +123,19 @@ class KomselController extends Controller
 
     public function show(Komsel $komsel)
     {
+        $user = auth()->user();
+        
+        // If regular member or service staff (not admin)
+        if ($user->id_role > 2) {
+            $anggota = $user->anggota;
+            
+            // Check if user is a member of this komsel
+            if (!$anggota || !$anggota->komsel->contains('id_komsel', $komsel->id_komsel)) {
+                return redirect()->route('komsel.index')
+                    ->with('error', 'Anda tidak memiliki akses untuk melihat kelompok sel ini.');
+            }
+        }
+        
         $komsel->load(['anggota', 'pemimpin']);
         
         // Get recent and upcoming meetings

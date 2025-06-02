@@ -161,7 +161,7 @@
                             Keluarga
                         </a>
                         @endif
-                        @endif
+                        
                         
                         <div class="sb-sidenav-menu-heading"></div>
                         @if(Route::has('kegiatan.index'))
@@ -170,11 +170,12 @@
                             Kegiatan
                         </a>
                         @endif
+                        @endif
 
                         @if(Route::has('pelaksanaan.index'))
                         <a class="nav-link {{ request()->routeIs('pelaksanaan.*') ? 'active' : '' }}" href="{{ route('pelaksanaan.index') }}">
                             <div class="sb-nav-link-icon"><i class="fas fa-calendar-plus"></i></div>
-                            Jadwal Ibadah
+                            Jadwal Kegiatan
                         </a>
                         @endif
                         

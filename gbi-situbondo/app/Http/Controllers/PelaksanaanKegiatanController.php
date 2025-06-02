@@ -13,11 +13,58 @@ class PelaksanaanKegiatanController extends Controller
 {
     public function index()
     {
-        $pelaksanaan = PelaksanaanKegiatan::with('kegiatan')
-            ->orderByRaw('DATE(tanggal_kegiatan) ASC')  // Sorting tanggal yang benar
-            ->orderBy('jam_mulai', 'asc')
-            ->get();
+        $user = auth()->user();
+        
+        // If admin, show all activities
+        if ($user->id_role <= 2) {
+            $pelaksanaan = PelaksanaanKegiatan::with('kegiatan')
+                ->orderByRaw('DATE(tanggal_kegiatan) ASC')
+                ->orderBy('jam_mulai', 'asc')
+                ->get();
+        }
+        // If regular member or service staff (roles 3 and 4)
+        else {
+            $anggota = $user->anggota;
             
+            if (!$anggota) {
+                // If user is not associated with any anggota, only show general church activities
+                $pelaksanaan = PelaksanaanKegiatan::with('kegiatan')
+                    ->whereHas('kegiatan', function($query) {
+                        $query->where('tipe_kegiatan', '!=', 'komsel');
+                    })
+                    ->orderByRaw('DATE(tanggal_kegiatan) ASC')
+                    ->orderBy('jam_mulai', 'asc')
+                    ->get();
+            } else {
+                // Get user's komsel names for the activities filter
+                $komselNames = $anggota->komsel->pluck('nama_komsel')->toArray();
+                $komselActivityPatterns = array_map(function($name) {
+                    return 'Komsel - ' . $name;
+                }, $komselNames);
+                
+                // Get activities related to user's komsel or non-komsel activities
+                $pelaksanaan = PelaksanaanKegiatan::with('kegiatan')
+                    ->where(function($query) use ($komselActivityPatterns) {
+                        // Include user's komsel activities
+                        $query->whereHas('kegiatan', function($subquery) use ($komselActivityPatterns) {
+                            $subquery->where('tipe_kegiatan', 'komsel')
+                                ->where(function($nameQuery) use ($komselActivityPatterns) {
+                                    foreach($komselActivityPatterns as $pattern) {
+                                        $nameQuery->orWhere('nama_kegiatan', $pattern);
+                                    }
+                                });
+                        })
+                        // Include non-komsel activities (church-wide)
+                        ->orWhereHas('kegiatan', function($subquery) {
+                            $subquery->where('tipe_kegiatan', '!=', 'komsel');
+                        });
+                    })
+                    ->orderByRaw('DATE(tanggal_kegiatan) ASC')
+                    ->orderBy('jam_mulai', 'asc')
+                    ->get();
+            }
+        }
+        
         return view('pelaksanaan.index', compact('pelaksanaan'));
     }
 
@@ -74,18 +121,31 @@ class PelaksanaanKegiatanController extends Controller
 
     public function show(PelaksanaanKegiatan $pelaksanaan)
     {
+        $user = auth()->user();
+        
+        // If regular member or service staff (not admin)
+        if ($user->id_role > 2) {
+            $anggota = $user->anggota;
+            
+            // Check if the activity is a komsel activity
+            if ($pelaksanaan->kegiatan && $pelaksanaan->kegiatan->tipe_kegiatan == 'komsel') {
+                // Extract komsel name from activity name
+                $komselName = str_replace('Komsel - ', '', $pelaksanaan->kegiatan->nama_kegiatan);
+                
+                // Check if user is a member of this komsel
+                if (!$anggota || !$anggota->komsel->contains('nama_komsel', $komselName)) {
+                    return redirect()->route('pelaksanaan.index')
+                        ->with('error', 'Anda tidak memiliki akses untuk melihat kegiatan komsel ini.');
+                }
+            }
+        }
+        
         $pelaksanaan->load('kegiatan', 'kehadiran.anggota');
         
         // Generate QR URL for attendance
         $qrUrl = route('kehadiran.scan', $pelaksanaan->id_pelaksanaan);
         
         return view('pelaksanaan.show', compact('pelaksanaan', 'qrUrl'));
-    }
-
-    public function edit(PelaksanaanKegiatan $pelaksanaan)
-    {
-        $kegiatan = Kegiatan::orderBy('nama_kegiatan')->get();
-        return view('pelaksanaan.edit', compact('pelaksanaan', 'kegiatan'));
     }
 
     public function update(Request $request, PelaksanaanKegiatan $pelaksanaan)
