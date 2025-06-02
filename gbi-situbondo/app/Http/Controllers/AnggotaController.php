@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Anggota;
 use App\Models\Keluarga;
 use App\Models\Komsel;
+use App\Models\HubunganKeluarga;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -58,12 +59,21 @@ class AnggotaController extends Controller
         DB::beginTransaction();
 
         try {
+            // Jika id_ortu ada tapi id_keluarga tidak ada, ambil keluarga dari orang tua
+            $id_keluarga = $request->id_keluarga;
+            if ($request->id_ortu && !$id_keluarga) {
+                $orangtua = Anggota::find($request->id_ortu);
+                if ($orangtua && $orangtua->id_keluarga) {
+                    $id_keluarga = $orangtua->id_keluarga;
+                }
+            }
+
             // Create anggota
             $anggota = Anggota::create([
                 'nama' => $request->nama,
                 'tanggal_lahir' => $request->tanggal_lahir,
                 'jenis_kelamin' => $request->jenis_kelamin,
-                'id_keluarga' => $request->id_keluarga,
+                'id_keluarga' => $id_keluarga,
                 'id_ortu' => $request->id_ortu,
                 'alamat' => $request->alamat,
                 'no_telepon' => $request->no_telepon,
@@ -96,7 +106,26 @@ class AnggotaController extends Controller
     public function show(Anggota $anggota)
     {
         $anggota->load(['keluarga', 'orangtua', 'anak', 'komsel']);
-        return view('anggota.show', compact('anggota'));
+        
+        // Ambil semua anggota keluarga yang berelasi
+        $anggotaKeluarga = $anggota->getAnggotaKeluarga();
+        
+        // Ambil hubungan keluarga
+        $hubunganKeluarga = [];
+        if ($anggota->id_keluarga) {
+            $hubunganKeluarga = HubunganKeluarga::whereIn('id_anggota', 
+                Anggota::where('id_keluarga', $anggota->id_keluarga)
+                    ->pluck('id_anggota')
+            )
+            ->orWhereIn('id_anggota_tujuan', 
+                Anggota::where('id_keluarga', $anggota->id_keluarga)
+                    ->pluck('id_anggota')
+            )
+            ->with(['anggota', 'anggotaTujuan'])
+            ->get();
+        }
+        
+        return view('anggota.show', compact('anggota', 'anggotaKeluarga', 'hubunganKeluarga'));
     }
 
     public function edit(Anggota $anggota)
@@ -133,17 +162,57 @@ class AnggotaController extends Controller
         DB::beginTransaction();
 
         try {
+            $oldOrtu = $anggota->id_ortu;
+            $oldKeluarga = $anggota->id_keluarga;
+            
+            // Jika id_ortu berubah, update keluarga sesuai orang tua baru
+            $id_keluarga = $request->id_keluarga;
+            if ($request->id_ortu && $request->id_ortu != $oldOrtu) {
+                $orangtua = Anggota::find($request->id_ortu);
+                if ($orangtua && $orangtua->id_keluarga) {
+                    $id_keluarga = $orangtua->id_keluarga;
+                }
+            }
+
             // Update anggota
             $anggota->update([
                 'nama' => $request->nama,
                 'tanggal_lahir' => $request->tanggal_lahir,
                 'jenis_kelamin' => $request->jenis_kelamin,
-                'id_keluarga' => $request->id_keluarga,
+                'id_keluarga' => $id_keluarga,
                 'id_ortu' => $request->id_ortu,
                 'alamat' => $request->alamat,
                 'no_telepon' => $request->no_telepon,
                 'email' => $request->email,
             ]);
+
+            // Jika orang tua berubah, update hubungan keluarga
+            if ($request->id_ortu != $oldOrtu) {
+                // Hapus hubungan lama dengan orang tua
+                if ($oldOrtu) {
+                    HubunganKeluarga::where('id_anggota', $anggota->id_anggota)
+                        ->where('id_anggota_tujuan', $oldOrtu)
+                        ->where('hubungan', 'Anak')
+                        ->delete();
+                }
+
+                // Buat hubungan baru dengan orang tua
+                if ($request->id_ortu) {
+                    // Cek apakah hubungan sudah ada
+                    $existingRelation = HubunganKeluarga::where('id_anggota', $anggota->id_anggota)
+                        ->where('id_anggota_tujuan', $request->id_ortu)
+                        ->where('hubungan', 'Anak')
+                        ->first();
+
+                    if (!$existingRelation) {
+                        HubunganKeluarga::create([
+                            'id_anggota' => $anggota->id_anggota,
+                            'id_anggota_tujuan' => $request->id_ortu,
+                            'hubungan' => 'Anak'
+                        ]);
+                    }
+                }
+            }
 
             // Update komsel
             DB::table('anggota_komsel')->where('id_anggota', $anggota->id_anggota)->delete();

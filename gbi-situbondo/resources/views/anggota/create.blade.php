@@ -69,6 +69,26 @@
                             </div>
                             <div class="col-md-6">
                                 <div class="form-group">
+                                    <label for="id_ortu" class="form-label">Orang Tua</label>
+                                    <select class="form-select @error('id_ortu') is-invalid @enderror" id="id_ortu" name="id_ortu">
+                                        <option value="">Pilih Orang Tua</option>
+                                        @foreach($anggota as $a)
+                                            <option value="{{ $a->id_anggota }}" data-keluarga="{{ $a->id_keluarga }}" {{ old('id_ortu') == $a->id_anggota ? 'selected' : '' }}>
+                                                {{ $a->nama }} @if($a->keluarga) ({{ $a->keluarga->nama_keluarga }}) @endif
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                    @error('id_ortu')
+                                        <div class="invalid-feedback">{{ $message }}</div>
+                                    @enderror
+                                    <small class="form-text text-muted">Memilih orang tua akan otomatis mengisi keluarga yang sama.</small>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <div class="form-group">
                                     <label for="id_keluarga" class="form-label">Keluarga</label>
                                     <select class="form-select @error('id_keluarga') is-invalid @enderror" id="id_keluarga" name="id_keluarga">
                                         <option value="">Pilih Keluarga</option>
@@ -81,25 +101,7 @@
                                     @error('id_keluarga')
                                         <div class="invalid-feedback">{{ $message }}</div>
                                     @enderror
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="row mb-3">
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="id_ortu" class="form-label">Orang Tua</label>
-                                    <select class="form-select @error('id_ortu') is-invalid @enderror" id="id_ortu" name="id_ortu">
-                                        <option value="">Pilih Orang Tua</option>
-                                        @foreach($anggota as $a)
-                                            <option value="{{ $a->id_anggota }}" {{ old('id_ortu') == $a->id_anggota ? 'selected' : '' }}>
-                                                {{ $a->nama }}
-                                            </option>
-                                        @endforeach
-                                    </select>
-                                    @error('id_ortu')
-                                        <div class="invalid-feedback">{{ $message }}</div>
-                                    @enderror
+                                    <small class="form-text text-muted">Akan terisi otomatis jika orang tua dipilih.</small>
                                 </div>
                             </div>
                             <div class="col-md-6">
@@ -162,12 +164,43 @@
 
 @section('scripts')
 <script>
-   // Initialize multiple select
    $(document).ready(function() {
+       // Initialize multiple select
        $('#komsel').select2({
            placeholder: "Pilih Kelompok Sel",
            allowClear: true
        });
+
+       // Auto-fill keluarga when parent is selected
+       $('#id_ortu').change(function() {
+           var selectedOption = $(this).find('option:selected');
+           var keluargaId = selectedOption.data('keluarga');
+           
+           if (keluargaId) {
+               $('#id_keluarga').val(keluargaId);
+               $('#id_keluarga').addClass('bg-light');
+               
+               // Show info message
+               if (!$('#auto-fill-info').length) {
+                   $('#id_keluarga').parent().append('<small id="auto-fill-info" class="text-success"><i class="fas fa-check-circle"></i> Keluarga otomatis terisi berdasarkan orang tua yang dipilih.</small>');
+               }
+           } else {
+               $('#id_keluarga').val('');
+               $('#id_keluarga').removeClass('bg-light');
+               $('#auto-fill-info').remove();
+           }
+       });
+
+       // Reset keluarga highlight when manually changed
+       $('#id_keluarga').change(function() {
+           $(this).removeClass('bg-light');
+           $('#auto-fill-info').remove();
+       });
+
+       // Trigger change on page load if old value exists
+       if ($('#id_ortu').val()) {
+           $('#id_ortu').trigger('change');
+       }
    });
 </script>
 @endsection

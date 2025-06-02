@@ -121,8 +121,67 @@
                     @endif
                 </div>
             </div>
-            
-            @if(count($anggota->anak) > 0)
+        </div>
+    </div>
+
+    <!-- Anggota Keluarga -->
+    @if($anggota->id_keluarga && count($anggotaKeluarga) > 0)
+    <div class="row">
+        <div class="col-xl-12">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="fas fa-home me-1"></i>
+                    Anggota Keluarga {{ $anggota->keluarga->nama_keluarga }}
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-bordered">
+                            <thead>
+                                <tr>
+                                    <th>Nama</th>
+                                    <th>Jenis Kelamin</th>
+                                    <th>Tanggal Lahir</th>
+                                    <th>Hubungan</th>
+                                    <th>No. Telepon</th>
+                                    <th>Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach($anggotaKeluarga as $keluarga)
+                                    <tr>
+                                        <td>
+                                            <a href="{{ route('anggota.show', $keluarga->id_anggota) }}">
+                                                {{ $keluarga->nama }}
+                                            </a>
+                                        </td>
+                                        <td>{{ $keluarga->jenis_kelamin == 'L' ? 'Laki-laki' : 'Perempuan' }}</td>
+                                        <td>{{ \Carbon\Carbon::parse($keluarga->tanggal_lahir)->format('d/m/Y') }}</td>
+                                        <td>
+                                            <span class="badge bg-info">
+                                                {{ $anggota->getHubunganDengan($keluarga->id_anggota) }}
+                                            </span>
+                                        </td>
+                                        <td>{{ $keluarga->no_telepon ?: '-' }}</td>
+                                        <td>
+                                            <a href="{{ route('anggota.show', $keluarga->id_anggota) }}" class="btn btn-info btn-sm">
+                                                <i class="fas fa-eye"></i>
+                                            </a>
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    @endif
+
+    <!-- Daftar Anak (jika ada) -->
+    @if(count($anggota->anak) > 0)
+    <div class="row">
+        <div class="col-xl-12">
             <div class="card mb-4">
                 <div class="card-header">
                     <i class="fas fa-child me-1"></i>
@@ -136,6 +195,8 @@
                                     <th>Nama</th>
                                     <th>Tanggal Lahir</th>
                                     <th>Jenis Kelamin</th>
+                                    <th>Keluarga</th>
+                                    <th>Aksi</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -148,6 +209,20 @@
                                         </td>
                                         <td>{{ \Carbon\Carbon::parse($anak->tanggal_lahir)->format('d/m/Y') }}</td>
                                         <td>{{ $anak->jenis_kelamin == 'L' ? 'Laki-laki' : 'Perempuan' }}</td>
+                                        <td>
+                                            @if($anak->keluarga)
+                                                <a href="{{ route('keluarga.show', $anak->id_keluarga) }}">
+                                                    {{ $anak->keluarga->nama_keluarga }}
+                                                </a>
+                                            @else
+                                                -
+                                            @endif
+                                        </td>
+                                        <td>
+                                            <a href="{{ route('anggota.show', $anak->id_anggota) }}" class="btn btn-info btn-sm">
+                                                <i class="fas fa-eye"></i>
+                                            </a>
+                                        </td>
                                     </tr>
                                 @endforeach
                             </tbody>
@@ -155,8 +230,54 @@
                     </div>
                 </div>
             </div>
-            @endif
         </div>
     </div>
+    @endif
+
+    <!-- Hubungan Keluarga Detail (jika ada) -->
+    @if(count($hubunganKeluarga) > 0)
+    <div class="row">
+        <div class="col-xl-12">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="fas fa-sitemap me-1"></i>
+                    Detail Hubungan Keluarga
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-bordered">
+                            <thead>
+                                <tr>
+                                    <th>Anggota</th>
+                                    <th>Hubungan</th>
+                                    <th>Anggota Tujuan</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach($hubunganKeluarga as $hubungan)
+                                    <tr>
+                                        <td>
+                                            <a href="{{ route('anggota.show', $hubungan->id_anggota) }}">
+                                                {{ $hubungan->anggota->nama }}
+                                            </a>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-secondary">{{ $hubungan->hubungan }}</span>
+                                        </td>
+                                        <td>
+                                            <a href="{{ route('anggota.show', $hubungan->id_anggota_tujuan) }}">
+                                                {{ $hubungan->anggotaTujuan->nama }}
+                                            </a>
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    @endif
 </div>
 @endsection
