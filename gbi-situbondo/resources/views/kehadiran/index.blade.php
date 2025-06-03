@@ -23,7 +23,7 @@
     @endif
     
     <div class="row">
-        <div class="col-xl-6">
+        <div class="col-xl-12">
             <div class="card mb-4">
                 <div class="card-header">
                     <i class="fas fa-calendar-alt me-1"></i>
@@ -69,63 +69,7 @@
                 </div>
             </div>
         </div>
-        
-        <div class="col-xl-6">
-            <div class="card mb-4">
-                <div class="card-header">
-                    <i class="fas fa-tools me-1"></i>
-                    Menu Presensi
-                </div>
-                <div class="card-body">
-                    <div class="row text-center">
-                        <div class="col-md-6 mb-4">
-                            <a href="{{ route('kehadiran.scan') }}" class="text-decoration-none">
-                                <div class="card h-100 bg-light">
-                                    <div class="card-body">
-                                        <i class="fas fa-qrcode fa-3x mb-3 text-primary"></i>
-                                        <h5 class="card-title">Scan QR Code</h5>
-                                        <p class="card-text">Tampilkan QR code untuk Presensi kehadiran jemaat</p>
-                                    </div>
-                                </div>
-                            </a>
-                        </div>
-                        <div class="col-md-6 mb-4">
-                            <a href="{{ route('kehadiran.create') }}" class="text-decoration-none">
-                                <div class="card h-100 bg-light">
-                                    <div class="card-body">
-                                        <i class="fas fa-clipboard-list fa-3x mb-3 text-success"></i>
-                                        <h5 class="card-title">Presensi Manual</h5>
-                                        <p class="card-text">Catat kehadiran jemaat secara manual dengan daftar nama</p>
-                                    </div>
-                                </div>
-                            </a>
-                        </div>
-                        <div class="col-md-6 mb-4">
-                            <a href="{{ route('kehadiran.laporan') }}" class="text-decoration-none">
-                                <div class="card h-100 bg-light">
-                                    <div class="card-body">
-                                        <i class="fas fa-chart-pie fa-3x mb-3 text-info"></i>
-                                        <h5 class="card-title">Laporan Kehadiran</h5>
-                                        <p class="card-text">Lihat laporan kehadiran jemaat berdasarkan periode</p>
-                                    </div>
-                                </div>
-                            </a>
-                        </div>
-                        <div class="col-md-6 mb-4">
-                            <a href="{{ route('pelaksanaan.index') }}" class="text-decoration-none">
-                                <div class="card h-100 bg-light">
-                                    <div class="card-body">
-                                        <i class="fas fa-calendar-day fa-3x mb-3 text-warning"></i>
-                                        <h5 class="card-title">Jadwal Kegiatan</h5>
-                                        <p class="card-text">Lihat semua jadwal kegiatan gereja</p>
-                                    </div>
-                                </div>
-                            </a>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+    
     </div>
 </div>
 @endsection

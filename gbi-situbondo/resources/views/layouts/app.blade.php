@@ -193,7 +193,7 @@
                         </a>
                         @endif
                         
-                        @if(Auth::check() && Auth::user()->id_role <= 3)
+                        
                         <div class="sb-sidenav-menu-heading"></div>
                         @if(Route::has('kehadiran.index'))
                         <a class="nav-link {{ request()->routeIs('kehadiran.*') ? 'active' : '' }}" href="{{ route('kehadiran.index') }}">
@@ -208,7 +208,7 @@
                             Laporan
                         </a>
                         @endif
-                        @endif
+                        
                         
                         @if(Auth::check() && Auth::user()->id_role == 1)
                         <div class="sb-sidenav-menu-heading"></div>

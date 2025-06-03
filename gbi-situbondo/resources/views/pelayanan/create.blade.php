@@ -125,7 +125,6 @@
                                                             <option 
                                                                 value="{{ $a->id_anggota }}" 
                                                                 {{ $alreadyScheduled ? 'selected' : '' }}
-                                                                {{ !$isAvailable ? 'disabled' : '' }}
                                                                 data-reguler="{{ $isReguler ? 'true' : 'false' }}"
                                                                 data-available="{{ $isAvailable ? 'true' : 'false' }}"
                                                             >
@@ -215,15 +214,6 @@
             // Add name
             $result.append('<span>' + anggota.text + '</span>');
             
-            // Add reguler badge if applicable
-            if (isReguler) {
-                $result.append(' <span class="badge bg-success ms-1">Regular</span>');
-            }
-            
-            // Add availability indicator
-            if (!isAvailable) {
-                $result.append(' <span class="badge bg-danger ms-1">Tidak Tersedia</span>');
-            }
             
             return $result;
         }
@@ -312,10 +302,7 @@
                     
                     let $result = $('<span></span>');
                     $result.append('<span>' + anggota.text + '</span>');
-                    
-                    if (!isAvailable) {
-                        $result.append(' <span class="badge bg-danger ms-1">Tidak Tersedia</span>');
-                    }
+                
                     
                     return $result;
                 }
