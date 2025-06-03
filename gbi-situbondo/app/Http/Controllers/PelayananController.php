@@ -1061,19 +1061,338 @@ class PelayananController extends Controller
         return false; // Placeholder
     }
     
-    // Export methods placeholders
-    private function exportToPdf($jadwal, $startDate, $endDate) 
-    { 
-        // PDF export implementation
+    /**
+     * Show all ministry members with filter and search
+     */
+    public function members(Request $request)
+    {
+        $query = Anggota::with(['spesialisasi', 'jadwalPelayanan']);
+        
+        // Search by name
+        if ($request->filled('search')) {
+            $query->where('nama', 'like', '%' . $request->search . '%');
+        }
+        
+        // Filter by position
+        if ($request->filled('posisi')) {
+            $query->whereHas('spesialisasi', function($q) use ($request) {
+                $q->where('posisi', $request->posisi);
+            });
+        }
+        
+        // Filter by status
+        if ($request->filled('status')) {
+            switch ($request->status) {
+                case 'reguler':
+                    $query->whereHas('spesialisasi', function($q) {
+                        $q->where('is_reguler', true);
+                    });
+                    break;
+                case 'non_reguler':
+                    $query->whereHas('spesialisasi', function($q) {
+                        $q->where('is_reguler', false);
+                    });
+                    break;
+                case 'available':
+                    $query->whereJsonContains('ketersediaan_hari', 0)
+                          ->orWhereJsonContains('ketersediaan_hari', 6);
+                    break;
+                case 'no_specialization':
+                    $query->whereDoesntHave('spesialisasi');
+                    break;
+            }
+        }
+        
+        // Apply sorting
+        switch ($request->get('sort', 'nama')) {
+            case 'total_services':
+                $query->withCount('jadwalPelayanan')
+                      ->orderBy('jadwal_pelayanan_count', 'desc');
+                break;
+            case 'recent_services':
+                $query->withCount(['jadwalPelayanan as recent_count' => function($q) {
+                        $q->where('tanggal_pelayanan', '>=', Carbon::now()->subMonths(3));
+                    }])
+                      ->orderBy('recent_count', 'desc');
+                break;
+            case 'workload':
+                // This would need a more complex query with scheduling_history
+                $query->orderBy('nama');
+                break;
+            default:
+                $query->orderBy('nama');
+        }
+        
+        $members = $query->paginate(20);
+        
+        // Statistics
+        $totalMembers = Anggota::whereHas('spesialisasi')->count();
+        $regularMembers = Anggota::whereHas('spesialisasi', function($q) {
+            $q->where('is_reguler', true);
+        })->count();
+        $weekendAvailable = Anggota::where(function($q) {
+            $q->whereJsonContains('ketersediaan_hari', 0)
+              ->orWhereJsonContains('ketersediaan_hari', 6);
+        })->count();
+        $needsSetup = Anggota::whereDoesntHave('spesialisasi')->count();
+        
+        // Available positions for filter
+        $availablePositions = AnggotaSpesialisasi::distinct('posisi')
+            ->pluck('posisi')
+            ->sort()
+            ->values();
+        
+        // Chart data
+        $positionDistribution = $this->getPositionDistributionData();
+        $regularDistribution = $this->getRegularDistributionData();
+        
+        return view('pelayanan.members', compact(
+            'members',
+            'totalMembers',
+            'regularMembers', 
+            'weekendAvailable',
+            'needsSetup',
+            'availablePositions',
+            'positionDistribution',
+            'regularDistribution'
+        ));
     }
     
-    private function exportToExcel($jadwal, $startDate, $endDate) 
-    { 
-        // Excel export implementation
+    /**
+     * Show member profile
+     */
+    public function memberProfile($id)
+    {
+        $anggota = Anggota::with(['spesialisasi', 'jadwalPelayanan.kegiatan', 'jadwalPelayanan.pelaksanaan'])
+            ->findOrFail($id);
+        
+        // Check permission
+        $user = Auth::user();
+        if ($user->id_role > 3 && $user->id_anggota != $id) {
+            return redirect()->route('pelayanan.members')
+                ->with('error', 'Anda tidak memiliki akses untuk melihat profile anggota lain.');
+        }
+        
+        // Statistics
+        $totalServices = $anggota->jadwalPelayanan->count();
+        $regularPositions = $anggota->spesialisasi->where('is_reguler', true)->count();
+        $totalPositions = $anggota->spesialisasi->count();
+        $recentServices = $anggota->jadwalPelayanan()
+            ->where('tanggal_pelayanan', '>=', Carbon::now()->subMonths(3))
+            ->count();
+        
+        $workloadScore = $anggota->getWorkloadScore(
+            Carbon::now()->subMonths(3),
+            Carbon::now()
+        );
+        
+        $restDays = $anggota->getRestDays();
+        
+        // Calculate availability percentage
+        $availabilityPercentage = 0;
+        if (!empty($anggota->ketersediaan_hari)) {
+            $availabilityPercentage = (count($anggota->ketersediaan_hari) / 7) * 100;
+        }
+        
+        // Recent schedules
+        $recentSchedules = $anggota->jadwalPelayanan()
+            ->with(['kegiatan', 'pelaksanaan'])
+            ->orderBy('tanggal_pelayanan', 'desc')
+            ->limit(10)
+            ->get();
+        
+        // Position categories for grouping
+        $positionCategories = AnggotaSpesialisasi::getPositionsByCategory();
+        
+        // Chart data for service history
+        $chartData = $this->getMemberChartData($anggota);
+        
+        return view('pelayanan.member-profile', compact(
+            'anggota',
+            'totalServices',
+            'regularPositions',
+            'totalPositions',
+            'recentServices',
+            'workloadScore',
+            'restDays',
+            'availabilityPercentage',
+            'recentSchedules',
+            'positionCategories',
+            'chartData'
+        ));
     }
     
-    private function exportToCalendar($jadwal, $startDate, $endDate) 
-    { 
-        // Calendar export implementation (iCal format)
+    /**
+     * Show member service history
+     */
+    public function memberHistory($id)
+    {
+        $anggota = Anggota::findOrFail($id);
+        
+        // Check permission
+        $user = Auth::user();
+        if ($user->id_role > 3 && $user->id_anggota != $id) {
+            return redirect()->route('pelayanan.members')
+                ->with('error', 'Anda tidak memiliki akses untuk melihat riwayat anggota lain.');
+        }
+        
+        $schedules = $anggota->jadwalPelayanan()
+            ->with(['kegiatan', 'pelaksanaan'])
+            ->orderBy('tanggal_pelayanan', 'desc')
+            ->paginate(50);
+        
+        return view('pelayanan.member-history', compact('anggota', 'schedules'));
+    }
+    
+    /**
+     * Assign regular positions to member
+     */
+    public function assignRegular($id)
+    {
+        if (Auth::user()->id_role > 2) {
+            return redirect()->route('pelayanan.members')
+                ->with('error', 'Anda tidak memiliki akses untuk assign regular.');
+        }
+        
+        $anggota = Anggota::with('spesialisasi')->findOrFail($id);
+        $positionCategories = AnggotaSpesialisasi::getPositionsByCategory();
+        
+        return view('pelayanan.assign-regular', compact('anggota', 'positionCategories'));
+    }
+    
+    /**
+     * Save regular assignments
+     */
+    public function saveRegularAssignment(Request $request, $id)
+    {
+        if (Auth::user()->id_role > 2) {
+            return redirect()->route('pelayanan.members')
+                ->with('error', 'Anda tidak memiliki akses untuk assign regular.');
+        }
+        
+        $validator = Validator::make($request->all(), [
+            'regular_positions' => 'sometimes|array',
+            'regular_positions.*' => 'string',
+            'new_specializations' => 'sometimes|array',
+            'new_specializations.*.posisi' => 'required|string',
+            'new_specializations.*.prioritas' => 'required|integer|min:1|max:10',
+        ]);
+
+        if ($validator->fails()) {
+            return redirect()->back()
+                ->withErrors($validator)
+                ->withInput();
+        }
+        
+        $anggota = Anggota::findOrFail($id);
+        
+        DB::beginTransaction();
+        
+        try {
+            // Update existing specializations
+            $anggota->spesialisasi()->update(['is_reguler' => false]);
+            
+            if ($request->filled('regular_positions')) {
+                foreach ($request->regular_positions as $posisi) {
+                    $anggota->spesialisasi()
+                        ->where('posisi', $posisi)
+                        ->update(['is_reguler' => true]);
+                }
+            }
+            
+            // Add new specializations
+            if ($request->filled('new_specializations')) {
+                foreach ($request->new_specializations as $spec) {
+                    AnggotaSpesialisasi::updateOrCreate([
+                        'id_anggota' => $anggota->id_anggota,
+                        'posisi' => $spec['posisi']
+                    ], [
+                        'prioritas' => $spec['prioritas'],
+                        'is_reguler' => in_array($spec['posisi'], $request->regular_positions ?? []),
+                    ]);
+                }
+            }
+            
+            DB::commit();
+            
+            return redirect()->route('pelayanan.member-profile', $id)
+                ->with('success', 'Assignment regular berhasil disimpan.');
+                
+        } catch (\Exception $e) {
+            DB::rollback();
+            Log::error('Error saving regular assignment: ' . $e->getMessage());
+            
+            return redirect()->back()
+                ->with('error', 'Terjadi kesalahan saat menyimpan assignment.')
+                ->withInput();
+        }
+    }
+    
+    /**
+     * Export members to Excel
+     */
+    public function exportMembers(Request $request)
+    {
+        // Implementation for Excel export
+        // This would use Laravel Excel or similar package
+        
+        return response()->download(storage_path('app/exports/anggota_pelayanan.xlsx'));
+    }
+    
+    /**
+     * Get position distribution data for chart
+     */
+    private function getPositionDistributionData()
+    {
+        $distribution = AnggotaSpesialisasi::select('posisi', DB::raw('count(*) as total'))
+            ->groupBy('posisi')
+            ->orderBy('total', 'desc')
+            ->get();
+        
+        return [
+            'labels' => $distribution->pluck('posisi')->toArray(),
+            'data' => $distribution->pluck('total')->toArray()
+        ];
+    }
+    
+    /**
+     * Get regular distribution data for chart
+     */
+    private function getRegularDistributionData()
+    {
+        $regularCount = AnggotaSpesialisasi::where('is_reguler', true)->count();
+        $nonRegularCount = AnggotaSpesialisasi::where('is_reguler', false)->count();
+        $noSpecCount = Anggota::whereDoesntHave('spesialisasi')->count();
+        
+        return [
+            'labels' => ['Reguler', 'Non Reguler', 'Belum Setup'],
+            'data' => [$regularCount, $nonRegularCount, $noSpecCount]
+        ];
+    }
+    
+    /**
+     * Get chart data for member service history
+     */
+    private function getMemberChartData($anggota)
+    {
+        $months = [];
+        $data = [];
+        
+        for ($i = 11; $i >= 0; $i--) {
+            $month = Carbon::now()->subMonths($i);
+            $months[] = $month->format('M Y');
+            
+            $count = $anggota->jadwalPelayanan()
+                ->whereYear('tanggal_pelayanan', $month->year)
+                ->whereMonth('tanggal_pelayanan', $month->month)
+                ->count();
+                
+            $data[] = $count;
+        }
+        
+        return [
+            'labels' => $months,
+            'data' => $data
+        ];
     }
 }

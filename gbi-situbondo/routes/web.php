@@ -72,9 +72,21 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/availability/{id?}', [PelayananController::class, 'editAvailability'])->name('availability');
         Route::post('/save-availability', [PelayananController::class, 'saveAvailability'])->name('save-availability');
         
+        // Member Management & Profiles
+        Route::get('/members', [PelayananController::class, 'members'])->name('members');
+        Route::get('/member-profile/{id}', [PelayananController::class, 'memberProfile'])->name('member-profile');
+        Route::get('/member-history/{id}', [PelayananController::class, 'memberHistory'])->name('member-history');
+        Route::get('/assign-regular/{id}', [PelayananController::class, 'assignRegular'])->name('assign-regular');
+        Route::post('/save-regular-assignment/{id}', [PelayananController::class, 'saveRegularAssignment'])->name('save-regular-assignment');
+        Route::get('/members/export', [PelayananController::class, 'exportMembers'])->name('members.export');
+        
         // Analytics & Reports
         Route::get('/analytics', [PelayananController::class, 'analytics'])->name('analytics');
         Route::get('/export', [PelayananController::class, 'export'])->name('export');
+        
+        // Debug & Setup Routes
+        Route::get('/debug-data', [PelayananController::class, 'debugData'])->name('debug-data');
+        Route::get('/setup-sample', [PelayananController::class, 'setupSampleData'])->name('setup-sample');
         
         // Notifications & Conflict Resolution
         Route::post('/send-notifications', [PelayananController::class, 'sendNotifications'])->name('send-notifications');
