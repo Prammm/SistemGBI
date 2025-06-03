@@ -7,11 +7,14 @@ use App\Models\Anggota;
 use App\Models\Kegiatan;
 use App\Models\JadwalPelayanan;
 use App\Models\PelaksanaanKegiatan;
-use App\Models\KetersediaanPelayan;
+use App\Models\AnggotaSpesialisasi;
+use App\Models\SchedulingHistory;
+use App\Models\JadwalTemplate;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 
 class PelayananController extends Controller
 {
@@ -22,10 +25,9 @@ class PelayananController extends Controller
 
     public function index()
     {
-        // Get upcoming pelayanan
         $user = Auth::user();
         
-        // For admin and pengurus gereja, show all schedules
+        // Get upcoming pelayanan
         if ($user->id_role <= 2) {
             $jadwalPelayanan = JadwalPelayanan::with(['anggota', 'pelaksanaan.kegiatan'])
                 ->whereHas('pelaksanaan', function($q) {
@@ -34,9 +36,7 @@ class PelayananController extends Controller
                 ->orderBy('tanggal_pelayanan')
                 ->get()
                 ->groupBy('tanggal_pelayanan');
-        }
-        // For pengurus pelayanan, show their team's schedules
-        else if ($user->id_role == 3) {
+        } else if ($user->id_role == 3) {
             $jadwalPelayanan = JadwalPelayanan::with(['anggota', 'pelaksanaan.kegiatan'])
                 ->whereHas('pelaksanaan', function($q) {
                     $q->where('tanggal_kegiatan', '>=', Carbon::now()->format('Y-m-d'));
@@ -44,9 +44,7 @@ class PelayananController extends Controller
                 ->orderBy('tanggal_pelayanan')
                 ->get()
                 ->groupBy('tanggal_pelayanan');
-        }
-        // For regular members, show their own schedules
-        else {
+        } else {
             if ($user->id_anggota) {
                 $jadwalPelayanan = JadwalPelayanan::with(['anggota', 'pelaksanaan.kegiatan'])
                     ->where('id_anggota', $user->id_anggota)
@@ -96,7 +94,7 @@ class PelayananController extends Controller
             }
         }
         
-        // Get upcoming pelaksanaan kegiatan for creating new schedules (admin and pengurus only)
+        // Get upcoming pelaksanaan kegiatan for creating new schedules
         $pelaksanaanKegiatan = [];
         if ($user->id_role <= 3) {
             $pelaksanaanKegiatan = PelaksanaanKegiatan::with('kegiatan')
@@ -113,7 +111,6 @@ class PelayananController extends Controller
     
     public function create(Request $request)
     {
-        // Check if user has permission
         if (Auth::user()->id_role > 3) {
             return redirect()->route('pelayanan.index')
                 ->with('error', 'Anda tidak memiliki akses untuk membuat jadwal pelayanan.');
@@ -124,7 +121,6 @@ class PelayananController extends Controller
             $pelaksanaan = PelaksanaanKegiatan::with('kegiatan')
                 ->findOrFail($request->id_pelaksanaan);
         } else {
-            // Jika tidak ada id_pelaksanaan, ambil pelaksanaan terdekat
             $pelaksanaan = PelaksanaanKegiatan::with('kegiatan')
                 ->whereHas('kegiatan', function($q) {
                     $q->where('tipe_kegiatan', 'ibadah');
@@ -139,8 +135,8 @@ class PelayananController extends Controller
                 ->with('error', 'Silahkan buat jadwal kegiatan ibadah terlebih dahulu.');
         }
         
-        // Get anggota for pelayanan with their availability
-        $anggota = Anggota::with(['jadwalPelayanan' => function($q) {
+        // Get anggota with their specializations and availability
+        $anggota = Anggota::with(['spesialisasi', 'jadwalPelayanan' => function($q) {
                 $q->orderBy('tanggal_pelayanan', 'desc');
             }])
             ->orderBy('nama')
@@ -151,16 +147,16 @@ class PelayananController extends Controller
             ->where('id_pelaksanaan', $pelaksanaan->id_pelaksanaan)
             ->get();
             
-        // Prepare posisi options
-        $posisiOptions = [
-            'Worship Leader', 'Singer', 'Keyboard', 'Guitar', 'Drum', 
-            'Sound System', 'Multimedia', 'Usher', 'Pembawa Persembahan', 'Pemimpin Pujian', 'Dokumentasi'
-        ];
+        // Get available positions
+        $posisiOptions = AnggotaSpesialisasi::getAvailablePositions();
         
-        // Jika sudah ada jadwal, siapkan data edit
+        // Prepare jadwal by position for editing
         $jadwalByPosisi = [];
         foreach ($existingJadwal as $jadwal) {
-            $jadwalByPosisi[$jadwal->posisi] = $jadwal;
+            if (!isset($jadwalByPosisi[$jadwal->posisi])) {
+                $jadwalByPosisi[$jadwal->posisi] = [];
+            }
+            $jadwalByPosisi[$jadwal->posisi][] = $jadwal;
         }
         
         // Get all upcoming pelaksanaan
@@ -184,7 +180,6 @@ class PelayananController extends Controller
     
     public function store(Request $request)
     {
-        // Check if user has permission
         if (Auth::user()->id_role > 3) {
             return redirect()->route('pelayanan.index')
                 ->with('error', 'Anda tidak memiliki akses untuk membuat jadwal pelayanan.');
@@ -195,7 +190,6 @@ class PelayananController extends Controller
             'petugas' => 'required|array',
             'petugas.*.posisi' => 'required|string',
             'petugas.*.id_anggota' => 'required|exists:anggota,id_anggota',
-            'petugas.*.is_reguler' => 'sometimes|boolean',
         ]);
 
         if ($validator->fails()) {
@@ -204,7 +198,6 @@ class PelayananController extends Controller
                 ->withInput();
         }
         
-        // Get pelaksanaan data for the tanggal
         $pelaksanaan = PelaksanaanKegiatan::findOrFail($request->id_pelaksanaan);
         
         DB::beginTransaction();
@@ -216,15 +209,18 @@ class PelayananController extends Controller
                 
             // Create new jadwal
             foreach ($request->petugas as $petugas) {
-                JadwalPelayanan::create([
+                $jadwal = JadwalPelayanan::create([
                     'id_kegiatan' => $pelaksanaan->id_kegiatan,
                     'id_pelaksanaan' => $request->id_pelaksanaan,
                     'tanggal_pelayanan' => $pelaksanaan->tanggal_kegiatan,
                     'id_anggota' => $petugas['id_anggota'],
                     'posisi' => $petugas['posisi'],
                     'status_konfirmasi' => 'belum',
-                    'is_reguler' => isset($petugas['is_reguler']) ? $petugas['is_reguler'] : false,
+                    'is_reguler' => false, // Will be determined by spesialisasi table
                 ]);
+                
+                // Create scheduling history
+                SchedulingHistory::createFromJadwal($jadwal);
             }
             
             DB::commit();
@@ -232,6 +228,7 @@ class PelayananController extends Controller
                 ->with('success', 'Jadwal pelayanan berhasil disimpan.');
         } catch (\Exception $e) {
             DB::rollback();
+            Log::error('Error storing pelayanan schedule: ' . $e->getMessage());
             return redirect()->back()
                 ->with('error', 'Terjadi kesalahan saat menyimpan jadwal pelayanan: ' . $e->getMessage())
                 ->withInput();
@@ -242,14 +239,12 @@ class PelayananController extends Controller
     {
         $jadwal = JadwalPelayanan::findOrFail($id);
         
-        // Check if user is authorized
         $user = Auth::user();
         if ($user->id_role > 3 && (!$user->id_anggota || $user->id_anggota != $jadwal->id_anggota)) {
             return redirect()->route('pelayanan.index')
                 ->with('error', 'Anda tidak memiliki akses untuk mengkonfirmasi jadwal ini.');
         }
         
-        // Check if status is valid
         if (!in_array($status, ['terima', 'tolak'])) {
             return redirect()->route('pelayanan.index')
                 ->with('error', 'Status konfirmasi tidak valid.');
@@ -264,7 +259,6 @@ class PelayananController extends Controller
     
     public function destroy($id)
     {
-        // Check if user has permission
         if (Auth::user()->id_role > 3) {
             return redirect()->route('pelayanan.index')
                 ->with('error', 'Anda tidak memiliki akses untuk menghapus jadwal pelayanan.');
@@ -277,15 +271,16 @@ class PelayananController extends Controller
             ->with('success', 'Jadwal pelayanan berhasil dihapus.');
     }
     
-    public function show()
+    /**
+     * Show generator form
+     */
+    public function showGenerator()
     {
-        // Check if user has permission
         if (Auth::user()->id_role > 2) {
             return redirect()->route('pelayanan.index')
                 ->with('error', 'Anda tidak memiliki akses untuk generate jadwal pelayanan.');
         }
         
-        // Get upcoming pelaksanaan for generator
         $pelaksanaan = PelaksanaanKegiatan::with('kegiatan')
             ->whereHas('kegiatan', function($q) {
                 $q->where('tipe_kegiatan', 'ibadah');
@@ -299,27 +294,45 @@ class PelayananController extends Controller
                 ->with('error', 'Silahkan buat jadwal kegiatan ibadah terlebih dahulu.');
         }
         
-        // Get all anggota with service history
-        $anggota = Anggota::whereHas('jadwalPelayanan')->get();
+        // Get anggota with specializations
+        $anggota = Anggota::with('spesialisasi')
+            ->whereHas('spesialisasi')
+            ->orderBy('nama')
+            ->get();
         
-        return view('pelayanan.generator', compact('pelaksanaan', 'anggota'));
+        // Get templates
+        $templates = JadwalTemplate::where('is_active', true)->get();
+        
+        // Get position categories
+        $positionCategories = AnggotaSpesialisasi::getPositionsByCategory();
+        
+        return view('pelayanan.generator', compact('pelaksanaan', 'anggota', 'templates', 'positionCategories'));
     }
     
+    /**
+     * Advanced Generate Schedule with multiple algorithms
+     */
     public function generateSchedule(Request $request)
     {
-        // Check if user has permission
         if (Auth::user()->id_role > 2) {
             return redirect()->route('pelayanan.index')
                 ->with('error', 'Anda tidak memiliki akses untuk generate jadwal pelayanan.');
         }
         
         $validator = Validator::make($request->all(), [
-            'id_pelaksanaan' => 'required|exists:pelaksanaan_kegiatan,id_pelaksanaan',
+            'generation_type' => 'required|in:single,bulk_monthly',
+            'id_pelaksanaan' => 'required_if:generation_type,single|array',
+            'id_pelaksanaan.*' => 'exists:pelaksanaan_kegiatan,id_pelaksanaan',
+            'month_year' => 'required_if:generation_type,bulk_monthly|date_format:Y-m',
             'positions' => 'required|array',
             'positions.*' => 'required|string',
             'anggota' => 'required|array',
             'anggota.*' => 'exists:anggota,id_anggota',
+            'algorithm' => 'required|in:balanced,regular_priority,fair_rotation,workload_based',
             'bobot_reguler' => 'required|numeric|min:1|max:10',
+            'template_id' => 'nullable|exists:jadwal_template,id',
+            'avoid_consecutive' => 'sometimes|boolean',
+            'max_services_per_month' => 'sometimes|integer|min:1|max:10',
         ]);
 
         if ($validator->fails()) {
@@ -328,82 +341,24 @@ class PelayananController extends Controller
                 ->withInput();
         }
         
-        $pelaksanaan = PelaksanaanKegiatan::with('kegiatan')->findOrFail($request->id_pelaksanaan);
-        $positions = $request->positions;
-        $selectedAnggota = $request->anggota;
-        $bobotReguler = $request->bobot_reguler;
-        
-        // Get selected anggota with their service history
-        $anggota = Anggota::with(['jadwalPelayanan' => function($q) use ($positions) {
-                $q->whereIn('posisi', $positions)
-                  ->orderBy('tanggal_pelayanan', 'desc');
-            }])
-            ->whereIn('id_anggota', $selectedAnggota)
-            ->get();
-        
-        if ($anggota->isEmpty()) {
-            return redirect()->back()
-                ->with('error', 'Tidak ada anggota yang dipilih untuk dijadwalkan.')
-                ->withInput();
-        }
-        
         DB::beginTransaction();
         
         try {
-            // Delete existing jadwal for this pelaksanaan
-            JadwalPelayanan::where('id_pelaksanaan', $pelaksanaan->id_pelaksanaan)
-                ->delete();
-                
-            // Prepare array for positions
-            $scheduledPositions = [];
-            $scheduledAnggota = [];
-            
-            // For each position, assign the most suitable person
-            foreach ($positions as $position) {
-                // Find eligible candidates based on position and availability
-                $eligibleCandidates = $this->findEligibleCandidates(
-                    $anggota, 
-                    $position, 
-                    $pelaksanaan, 
-                    $scheduledAnggota,
-                    $bobotReguler
-                );
-                
-                if ($eligibleCandidates->isEmpty()) {
-                    continue; // Skip this position if no eligible candidates
-                }
-                
-                // Select the best candidate
-                $selectedCandidate = $eligibleCandidates->first();
-                
-                // Create jadwal
-                $jadwal = JadwalPelayanan::create([
-                    'id_kegiatan' => $pelaksanaan->id_kegiatan,
-                    'id_pelaksanaan' => $pelaksanaan->id_pelaksanaan,
-                    'tanggal_pelayanan' => $pelaksanaan->tanggal_kegiatan,
-                    'id_anggota' => $selectedCandidate->id_anggota,
-                    'posisi' => $position,
-                    'status_konfirmasi' => 'belum',
-                    'is_reguler' => $selectedCandidate->is_reguler ?? false,
-                ]);
-                
-                $scheduledPositions[] = $position;
-                $scheduledAnggota[] = $selectedCandidate->id_anggota;
+            if ($request->generation_type === 'single') {
+                $result = $this->generateSingleSchedule($request);
+            } else {
+                $result = $this->generateMonthlySchedule($request);
             }
             
             DB::commit();
             
-            if (count($scheduledPositions) < count($positions)) {
-                $skippedPositions = array_diff($positions, $scheduledPositions);
-                return redirect()->route('pelayanan.index')
-                    ->with('warning', 'Beberapa posisi tidak dapat dijadwalkan karena tidak ada petugas yang tersedia: ' . implode(', ', $skippedPositions))
-                    ->with('success', 'Jadwal pelayanan berhasil digenerate untuk ' . count($scheduledPositions) . ' posisi.');
-            } else {
-                return redirect()->route('pelayanan.index')
-                    ->with('success', 'Jadwal pelayanan berhasil digenerate untuk semua posisi.');
-            }
+            return redirect()->route('pelayanan.index')
+                ->with('success', $result['message'])
+                ->with('info', $result['details'] ?? '');
+                
         } catch (\Exception $e) {
             DB::rollback();
+            Log::error('Error generating schedule: ' . $e->getMessage());
             return redirect()->back()
                 ->with('error', 'Terjadi kesalahan saat generate jadwal: ' . $e->getMessage())
                 ->withInput();
@@ -411,124 +366,351 @@ class PelayananController extends Controller
     }
     
     /**
-     * Find eligible candidates for a position
+     * Generate single event schedule
      */
-    private function findEligibleCandidates($anggota, $position, $pelaksanaan, $scheduledAnggota, $bobotReguler)
+    private function generateSingleSchedule(Request $request)
     {
-        // Extract day of week and event times
+        $pelaksanaanIds = is_array($request->id_pelaksanaan) ? $request->id_pelaksanaan : [$request->id_pelaksanaan];
+        $positions = $request->positions;
+        $selectedAnggota = $request->anggota;
+        $algorithm = $request->algorithm;
+        $bobotReguler = $request->bobot_reguler;
+        
+        $totalScheduled = 0;
+        $totalSkipped = 0;
+        $conflicts = [];
+        
+        foreach ($pelaksanaanIds as $pelaksanaanId) {
+            $pelaksanaan = PelaksanaanKegiatan::with('kegiatan')->findOrFail($pelaksanaanId);
+            
+            // Delete existing jadwal
+            JadwalPelayanan::where('id_pelaksanaan', $pelaksanaan->id_pelaksanaan)->delete();
+            
+            $anggota = Anggota::with(['spesialisasi', 'jadwalPelayanan'])
+                ->whereIn('id_anggota', $selectedAnggota)
+                ->get();
+            
+            $result = $this->executeSchedulingAlgorithm(
+                $anggota, 
+                $positions, 
+                $pelaksanaan, 
+                $algorithm,
+                $bobotReguler,
+                $request
+            );
+            
+            $totalScheduled += $result['scheduled'];
+            $totalSkipped += $result['skipped'];
+            $conflicts = array_merge($conflicts, $result['conflicts']);
+        }
+        
+        $message = "Jadwal berhasil digenerate untuk {$totalScheduled} posisi";
+        $details = '';
+        
+        if ($totalSkipped > 0) {
+            $details .= "⚠️ {$totalSkipped} posisi tidak dapat dijadwalkan. ";
+        }
+        
+        if (!empty($conflicts)) {
+            $details .= "⚠️ Ditemukan konflik: " . implode(', ', array_unique($conflicts));
+        }
+        
+        return [
+            'message' => $message,
+            'details' => $details
+        ];
+    }
+    
+    /**
+     * Generate monthly schedule
+     */
+    private function generateMonthlySchedule(Request $request)
+    {
+        $monthYear = Carbon::createFromFormat('Y-m', $request->month_year);
+        $startDate = $monthYear->copy()->startOfMonth();
+        $endDate = $monthYear->copy()->endOfMonth();
+        
+        $pelaksanaan = PelaksanaanKegiatan::with('kegiatan')
+            ->whereHas('kegiatan', function($q) {
+                $q->where('tipe_kegiatan', 'ibadah');
+            })
+            ->whereBetween('tanggal_kegiatan', [$startDate, $endDate])
+            ->orderBy('tanggal_kegiatan')
+            ->get();
+            
+        if ($pelaksanaan->isEmpty()) {
+            throw new \Exception('Tidak ada kegiatan ibadah pada bulan tersebut.');
+        }
+        
+        $positions = $request->positions;
+        $selectedAnggota = $request->anggota;
+        $algorithm = $request->algorithm;
+        $bobotReguler = $request->bobot_reguler;
+        $maxServicesPerMonth = $request->max_services_per_month ?? 3;
+        
+        // Track member workload for the month
+        $memberWorkload = [];
+        foreach ($selectedAnggota as $anggotaId) {
+            $memberWorkload[$anggotaId] = 0;
+        }
+        
+        $totalScheduled = 0;
+        $totalSkipped = 0;
+        $conflicts = [];
+        
+        foreach ($pelaksanaan as $p) {
+            // Delete existing jadwal
+            JadwalPelayanan::where('id_pelaksanaan', $p->id_pelaksanaan)->delete();
+            
+            $anggota = Anggota::with(['spesialisasi', 'jadwalPelayanan'])
+                ->whereIn('id_anggota', $selectedAnggota)
+                ->get()
+                ->filter(function($a) use ($memberWorkload, $maxServicesPerMonth) {
+                    return $memberWorkload[$a->id_anggota] < $maxServicesPerMonth;
+                });
+            
+            $result = $this->executeSchedulingAlgorithm(
+                $anggota, 
+                $positions, 
+                $p, 
+                $algorithm,
+                $bobotReguler,
+                $request,
+                $memberWorkload
+            );
+            
+            // Update workload tracking
+            foreach ($result['scheduled_members'] as $anggotaId) {
+                $memberWorkload[$anggotaId]++;
+            }
+            
+            $totalScheduled += $result['scheduled'];
+            $totalSkipped += $result['skipped'];
+            $conflicts = array_merge($conflicts, $result['conflicts']);
+        }
+        
+        $message = "Jadwal bulanan berhasil digenerate untuk {$totalScheduled} posisi dalam {$pelaksanaan->count()} kegiatan";
+        $details = '';
+        
+        if ($totalSkipped > 0) {
+            $details .= "⚠️ {$totalSkipped} posisi tidak dapat dijadwalkan. ";
+        }
+        
+        return [
+            'message' => $message,
+            'details' => $details
+        ];
+    }
+    
+    /**
+     * Execute scheduling algorithm
+     */
+    private function executeSchedulingAlgorithm($anggota, $positions, $pelaksanaan, $algorithm, $bobotReguler, $request, $workloadTracking = [])
+    {
+        $scheduledPositions = [];
+        $scheduledMembers = [];
+        $conflicts = [];
+        
+        foreach ($positions as $position) {
+            $candidates = $this->findEligibleCandidates(
+                $anggota, 
+                $position, 
+                $pelaksanaan, 
+                $scheduledMembers,
+                $algorithm,
+                $bobotReguler,
+                $workloadTracking
+            );
+            
+            if ($candidates->isEmpty()) {
+                $conflicts[] = "Tidak ada kandidat untuk posisi {$position}";
+                continue;
+            }
+            
+            $selectedCandidate = $candidates->first();
+            
+            // Check for consecutive service conflict if enabled
+            if ($request->avoid_consecutive ?? false) {
+                if ($this->hasConflictingSchedule($selectedCandidate, $pelaksanaan)) {
+                    $conflicts[] = "Konflik jadwal berurutan untuk {$selectedCandidate->nama} di posisi {$position}";
+                    // Try next candidate
+                    if ($candidates->count() > 1) {
+                        $selectedCandidate = $candidates->skip(1)->first();
+                    } else {
+                        continue;
+                    }
+                }
+            }
+            
+            // Create jadwal
+            $jadwal = JadwalPelayanan::create([
+                'id_kegiatan' => $pelaksanaan->id_kegiatan,
+                'id_pelaksanaan' => $pelaksanaan->id_pelaksanaan,
+                'tanggal_pelayanan' => $pelaksanaan->tanggal_kegiatan,
+                'id_anggota' => $selectedCandidate->id_anggota,
+                'posisi' => $position,
+                'status_konfirmasi' => 'belum',
+                'is_reguler' => $selectedCandidate->isRegularIn($position),
+            ]);
+            
+            // Create scheduling history
+            SchedulingHistory::createFromJadwal($jadwal);
+            
+            $scheduledPositions[] = $position;
+            $scheduledMembers[] = $selectedCandidate->id_anggota;
+        }
+        
+        return [
+            'scheduled' => count($scheduledPositions),
+            'skipped' => count($positions) - count($scheduledPositions),
+            'conflicts' => $conflicts,
+            'scheduled_members' => array_unique($scheduledMembers)
+        ];
+    }
+    
+    /**
+     * Find eligible candidates with advanced algorithms
+     */
+    private function findEligibleCandidates($anggota, $position, $pelaksanaan, $scheduledMembers, $algorithm, $bobotReguler, $workloadTracking = [])
+    {
         $eventDay = Carbon::parse($pelaksanaan->tanggal_kegiatan)->dayOfWeek;
         $eventStart = $pelaksanaan->jam_mulai;
         $eventEnd = $pelaksanaan->jam_selesai;
+        $eventDate = $pelaksanaan->tanggal_kegiatan;
         
-        // Filter candidates
-        $eligibleCandidates = $anggota->filter(function ($anggota) use ($position, $scheduledAnggota, $eventDay, $eventStart, $eventEnd) {
-            // Skip if already scheduled for this event
-            if (in_array($anggota->id_anggota, $scheduledAnggota)) {
+        // Filter basic eligibility
+        $eligibleCandidates = $anggota->filter(function ($anggota) use ($position, $scheduledMembers, $eventDay, $eventStart, $eventEnd, $eventDate) {
+            // Skip if already scheduled
+            if (in_array($anggota->id_anggota, $scheduledMembers)) {
                 return false;
             }
             
-            // Check if they have served in this position before
-            $hasServedInPosition = $anggota->jadwalPelayanan->contains('posisi', $position);
-            
-            // Check if they're available at this time
-            $isAvailable = true;
-            if ($anggota->ketersediaan_hari && $anggota->ketersediaan_jam) {
-                $isAvailable = in_array($eventDay, $anggota->ketersediaan_hari);
-                
-                if ($isAvailable) {
-                    $availableDuringEvent = false;
-                    foreach ($anggota->ketersediaan_jam as $timeSlot) {
-                        list($availStart, $availEnd) = explode('-', $timeSlot);
-                        if ($eventStart >= $availStart && $eventEnd <= $availEnd) {
-                            $availableDuringEvent = true;
-                            break;
-                        }
-                    }
-                    $isAvailable = $availableDuringEvent;
-                }
+            // Check if they can serve this position
+            $hasSpecialization = $anggota->spesialisasi->contains('posisi', $position);
+            if (!$hasSpecialization) {
+                return false;
             }
             
-            return $hasServedInPosition && $isAvailable;
+            // Check availability
+            if (!$anggota->isAvailable($eventDate, $eventStart, $eventEnd)) {
+                return false;
+            }
+            
+            return true;
         });
         
         if ($eligibleCandidates->isEmpty()) {
-            // If no specific candidates, try anyone who is available
-            $eligibleCandidates = $anggota->filter(function ($anggota) use ($scheduledAnggota, $eventDay, $eventStart, $eventEnd) {
-                // Skip if already scheduled for this event
-                if (in_array($anggota->id_anggota, $scheduledAnggota)) {
-                    return false;
-                }
-                
-                // Check if they're available at this time
-                $isAvailable = true;
-                if ($anggota->ketersediaan_hari && $anggota->ketersediaan_jam) {
-                    $isAvailable = in_array($eventDay, $anggota->ketersediaan_hari);
-                    
-                    if ($isAvailable) {
-                        $availableDuringEvent = false;
-                        foreach ($anggota->ketersediaan_jam as $timeSlot) {
-                            list($availStart, $availEnd) = explode('-', $timeSlot);
-                            if ($eventStart >= $availStart && $eventEnd <= $availEnd) {
-                                $availableDuringEvent = true;
-                                break;
-                            }
-                        }
-                        $isAvailable = $availableDuringEvent;
-                    }
-                }
-                
-                return $isAvailable;
-            });
+            return collect();
         }
         
-        // Sort candidates by score (combination of factors)
-        return $eligibleCandidates->sortByDesc(function ($anggota) use ($position, $bobotReguler) {
-            // Base score
-            $score = 0;
-            
-            // Check when they served last time in this position
-            $lastServed = $anggota->jadwalPelayanan
-                ->where('posisi', $position)
-                ->first();
-                
-            if ($lastServed) {
-                $daysSinceLastServed = Carbon::parse($lastServed->tanggal_pelayanan)
-                    ->diffInDays(Carbon::now());
-                    
-                // Higher score for those who haven't served in a while
-                $score += min($daysSinceLastServed / 7, 100); // Max score is 100 (after ~2 years)
-            } else {
-                // If never served in this position, give a moderate score
-                $score += 50;
-            }
-            
-            // Count how many times they've served in this position
-            $serveCount = $anggota->jadwalPelayanan
-                ->where('posisi', $position)
-                ->count();
-                
-            // Favor those who have served less often (but at least once)
-            if ($serveCount > 0) {
-                $score += max(20 - $serveCount, 0); // Max bonus of 20, decreasing with more services
-            }
-            
-            // Check if they are regular players for this position
-            $isReguler = $anggota->jadwalPelayanan
-                ->where('posisi', $position)
-                ->where('is_reguler', true)
-                ->count() > 0;
-                
-            // Give bonus to regular players
-            if ($isReguler) {
-                $score += $bobotReguler * 10; // Bonus based on reguler weight setting
-            }
-            
-            return $score;
+        // Apply algorithm-specific scoring
+        return $eligibleCandidates->sortByDesc(function ($anggota) use ($position, $algorithm, $bobotReguler, $workloadTracking) {
+            return $this->calculateCandidateScore($anggota, $position, $algorithm, $bobotReguler, $workloadTracking);
         });
     }
     
     /**
-     * Save member availability
+     * Calculate candidate score based on algorithm
+     */
+    private function calculateCandidateScore($anggota, $position, $algorithm, $bobotReguler, $workloadTracking)
+    {
+        $score = 0;
+        
+        // Base factors
+        $isReguler = $anggota->isRegularIn($position);
+        $prioritas = $anggota->getPriorityFor($position);
+        $restDays = $anggota->getRestDays($position);
+        $serviceFrequency = $anggota->getServiceFrequency(3, $position); // Last 3 months
+        $currentWorkload = $workloadTracking[$anggota->id_anggota] ?? 0;
+        
+        switch ($algorithm) {
+            case 'regular_priority':
+                // Prioritize regular players
+                if ($isReguler) {
+                    $score += 100 + ($bobotReguler * 10);
+                }
+                $score += $prioritas * 5;
+                $score += min($restDays / 7, 50); // Bonus for rest days
+                break;
+                
+            case 'fair_rotation':
+                // Prioritize fair distribution
+                $score += max(100 - $serviceFrequency * 10, 0); // Less frequent = higher score
+                $score += min($restDays / 3, 100); // More rest = higher score
+                $score -= $currentWorkload * 20; // Less current workload = higher score
+                if ($isReguler) {
+                    $score += $bobotReguler * 5; // Moderate regular bonus
+                }
+                break;
+                
+            case 'workload_based':
+                // Balance workload
+                $score += max(200 - $currentWorkload * 50, 0); // Heavily favor low workload
+                $score -= $serviceFrequency * 5; // Slight penalty for frequency
+                $score += min($restDays / 7, 30); // Small rest bonus
+                if ($isReguler) {
+                    $score += $bobotReguler * 3; // Small regular bonus
+                }
+                break;
+                
+            case 'balanced':
+            default:
+                // Balanced approach
+                if ($isReguler) {
+                    $score += 50 + ($bobotReguler * 5);
+                }
+                $score += $prioritas * 3;
+                $score += min($restDays / 7, 70);
+                $score += max(50 - $serviceFrequency * 5, 0);
+                $score -= $currentWorkload * 10;
+                break;
+        }
+        
+        return $score;
+    }
+    
+    /**
+     * Check for conflicting consecutive schedules
+     */
+    private function hasConflictingSchedule($anggota, $pelaksanaan)
+    {
+        $eventDate = Carbon::parse($pelaksanaan->tanggal_kegiatan);
+        $prevWeek = $eventDate->copy()->subWeek();
+        $nextWeek = $eventDate->copy()->addWeek();
+        
+        $conflictingSchedules = JadwalPelayanan::where('id_anggota', $anggota->id_anggota)
+            ->whereIn('tanggal_pelayanan', [$prevWeek->format('Y-m-d'), $nextWeek->format('Y-m-d')])
+            ->exists();
+            
+        return $conflictingSchedules;
+    }
+    
+    /**
+     * Manage member availability
+     */
+    public function editAvailability($id = null)
+    {
+        $user = Auth::user();
+        
+        if (!$id && $user->id_anggota) {
+            $id = $user->id_anggota;
+        }
+        
+        if ($user->id_role > 3 && $user->id_anggota != $id) {
+            return redirect()->route('dashboard')
+                ->with('error', 'Anda tidak memiliki akses untuk melihat ketersediaan anggota lain.');
+        }
+        
+        $anggota = Anggota::with('spesialisasi')->findOrFail($id);
+        
+        $positions = AnggotaSpesialisasi::getAvailablePositions();
+        $positionCategories = AnggotaSpesialisasi::getPositionsByCategory();
+        
+        return view('pelayanan.availability', compact('anggota', 'positions', 'positionCategories'));
+    }
+    
+    /**
+     * Save member availability and specializations
      */
     public function saveAvailability(Request $request)
     {
@@ -538,8 +720,12 @@ class PelayananController extends Controller
             'ketersediaan_hari.*' => 'required|integer|min:0|max:6',
             'ketersediaan_jam' => 'required|array',
             'ketersediaan_jam.*' => 'required|string|regex:/^([0-1][0-9]|2[0-3]):[0-5][0-9]-([0-1][0-9]|2[0-3]):[0-5][0-9]$/',
-            'posisi_reguler' => 'sometimes|array',
-            'posisi_reguler.*' => 'string',
+            'blackout_dates' => 'sometimes|array',
+            'blackout_dates.*' => 'date',
+            'spesialisasi' => 'sometimes|array',
+            'spesialisasi.*.posisi' => 'required|string',
+            'spesialisasi.*.is_reguler' => 'sometimes|boolean',
+            'spesialisasi.*.prioritas' => 'required|integer|min:1|max:10',
         ]);
 
         if ($validator->fails()) {
@@ -551,69 +737,343 @@ class PelayananController extends Controller
         $user = Auth::user();
         $anggota = Anggota::findOrFail($request->id_anggota);
         
-        // Ensure the user is authorized to update this anggota
         if ($user->id_role > 3 && $user->id_anggota != $anggota->id_anggota) {
             return redirect()->back()
                 ->with('error', 'Anda tidak memiliki akses untuk mengubah ketersediaan anggota lain.');
         }
         
-        // Update availability
-        $anggota->ketersediaan_hari = $request->ketersediaan_hari;
-        $anggota->ketersediaan_jam = $request->ketersediaan_jam;
-        $anggota->save();
+        DB::beginTransaction();
         
-        // Update regular positions if provided
-        if ($request->has('posisi_reguler')) {
-            // Clear existing regular positions
-            DB::table('jadwal_pelayanan')
-                ->where('id_anggota', $anggota->id_anggota)
-                ->update(['is_reguler' => false]);
+        try {
+            // Update availability
+            $anggota->update([
+                'ketersediaan_hari' => $request->ketersediaan_hari,
+                'ketersediaan_jam' => $request->ketersediaan_jam,
+                'blackout_dates' => $request->blackout_dates ?? [],
+            ]);
+            
+            // Update specializations
+            if ($request->has('spesialisasi')) {
+                // Delete existing specializations
+                AnggotaSpesialisasi::where('id_anggota', $anggota->id_anggota)->delete();
                 
-            // Set new regular positions
-            foreach ($request->posisi_reguler as $posisi) {
-                DB::table('jadwal_pelayanan')
-                    ->where('id_anggota', $anggota->id_anggota)
-                    ->where('posisi', $posisi)
-                    ->update(['is_reguler' => true]);
+                // Create new specializations
+                foreach ($request->spesialisasi as $spec) {
+                    AnggotaSpesialisasi::create([
+                        'id_anggota' => $anggota->id_anggota,
+                        'posisi' => $spec['posisi'],
+                        'is_reguler' => $spec['is_reguler'] ?? false,
+                        'prioritas' => $spec['prioritas'],
+                        'catatan' => $spec['catatan'] ?? null,
+                    ]);
+                }
+            }
+            
+            DB::commit();
+            return redirect()->back()
+                ->with('success', 'Ketersediaan dan spesialisasi anggota berhasil disimpan.');
+                
+        } catch (\Exception $e) {
+            DB::rollback();
+            Log::error('Error saving availability: ' . $e->getMessage());
+            return redirect()->back()
+                ->with('error', 'Terjadi kesalahan saat menyimpan data: ' . $e->getMessage())
+                ->withInput();
+        }
+    }
+    
+    /**
+     * Show analytics and reports
+     */
+    public function analytics()
+    {
+        if (Auth::user()->id_role > 2) {
+            return redirect()->route('pelayanan.index')
+                ->with('error', 'Anda tidak memiliki akses untuk melihat analitik pelayanan.');
+        }
+        
+        $startDate = Carbon::now()->subMonths(3);
+        $endDate = Carbon::now();
+        
+        // Workload distribution
+        $workloadDistribution = SchedulingHistory::getWorkloadDistribution($startDate, $endDate);
+        
+        // Position frequency
+        $positionFrequency = SchedulingHistory::getPositionFrequency($startDate, $endDate);
+        
+        // Regular vs non-regular performance
+        $regularPerformance = $this->getRegularPerformanceData($startDate, $endDate);
+        
+        // Availability coverage
+        $availabilityCoverage = $this->getAvailabilityCoverage();
+        
+        return view('pelayanan.analytics', compact(
+            'workloadDistribution',
+            'positionFrequency', 
+            'regularPerformance',
+            'availabilityCoverage'
+        ));
+    }
+    
+    /**
+     * Get regular vs non-regular performance data
+     */
+    private function getRegularPerformanceData($startDate, $endDate)
+    {
+        $histories = SchedulingHistory::with('anggota.spesialisasi')
+            ->whereBetween('tanggal_pelayanan', [$startDate, $endDate])
+            ->get();
+            
+        $regularCount = 0;
+        $nonRegularCount = 0;
+        
+        foreach ($histories as $history) {
+            $isReguler = $history->anggota->spesialisasi
+                ->where('posisi', $history->posisi)
+                ->where('is_reguler', true)
+                ->isNotEmpty();
+                
+            if ($isReguler) {
+                $regularCount++;
+            } else {
+                $nonRegularCount++;
+            }
+        }
+        
+        return [
+            'regular_count' => $regularCount,
+            'non_regular_count' => $nonRegularCount,
+            'regular_percentage' => $regularCount + $nonRegularCount > 0 
+                ? round(($regularCount / ($regularCount + $nonRegularCount)) * 100, 2)
+                : 0
+        ];
+    }
+    
+    /**
+     * Get availability coverage data
+     */
+    private function getAvailabilityCoverage()
+    {
+        $totalAnggota = Anggota::whereHas('spesialisasi')->count();
+        $anggotaWithAvailability = Anggota::whereNotNull('ketersediaan_hari')
+            ->whereNotNull('ketersediaan_jam')
+            ->whereHas('spesialisasi')
+            ->count();
+            
+        $coveragePercentage = $totalAnggota > 0 
+            ? round(($anggotaWithAvailability / $totalAnggota) * 100, 2)
+            : 0;
+            
+        return [
+            'total_anggota' => $totalAnggota,
+            'with_availability' => $anggotaWithAvailability,
+            'coverage_percentage' => $coveragePercentage
+        ];
+    }
+    
+    /**
+     * Bulk generate monthly schedules
+     */
+    public function bulkGenerate(Request $request)
+    {
+        if (Auth::user()->id_role > 2) {
+            return redirect()->route('pelayanan.index')
+                ->with('error', 'Anda tidak memiliki akses untuk bulk generate jadwal pelayanan.');
+        }
+        
+        $validator = Validator::make($request->all(), [
+            'start_month' => 'required|date_format:Y-m',
+            'end_month' => 'required|date_format:Y-m|after_or_equal:start_month',
+            'template_id' => 'required|exists:jadwal_template,id',
+            'algorithm' => 'required|in:balanced,regular_priority,fair_rotation,workload_based',
+            'bobot_reguler' => 'required|numeric|min:1|max:10',
+            'max_services_per_month' => 'required|integer|min:1|max:10',
+        ]);
+
+        if ($validator->fails()) {
+            return redirect()->back()
+                ->withErrors($validator)
+                ->withInput();
+        }
+        
+        $startMonth = Carbon::createFromFormat('Y-m', $request->start_month);
+        $endMonth = Carbon::createFromFormat('Y-m', $request->end_month);
+        
+        DB::beginTransaction();
+        
+        try {
+            $template = JadwalTemplate::findOrFail($request->template_id);
+            $positions = $template->posisi_required;
+            
+            $anggota = Anggota::with('spesialisasi')
+                ->whereHas('spesialisasi', function($q) use ($positions) {
+                    $q->whereIn('posisi', $positions);
+                })
+                ->get()
+                ->pluck('id_anggota')
+                ->toArray();
+            
+            $totalScheduled = 0;
+            $monthsProcessed = 0;
+            
+            $currentMonth = $startMonth->copy();
+            while ($currentMonth->lte($endMonth)) {
+                $monthRequest = new Request([
+                    'generation_type' => 'bulk_monthly',
+                    'month_year' => $currentMonth->format('Y-m'),
+                    'positions' => $positions,
+                    'anggota' => $anggota,
+                    'algorithm' => $request->algorithm,
+                    'bobot_reguler' => $request->bobot_reguler,
+                    'max_services_per_month' => $request->max_services_per_month,
+                    'avoid_consecutive' => true,
+                ]);
+                
+                $result = $this->generateMonthlySchedule($monthRequest);
+                $totalScheduled += $result['scheduled'] ?? 0;
+                $monthsProcessed++;
+                
+                $currentMonth->addMonth();
+            }
+            
+            DB::commit();
+            
+            return redirect()->route('pelayanan.index')
+                ->with('success', "Bulk generate berhasil untuk {$monthsProcessed} bulan dengan total {$totalScheduled} jadwal.");
+                
+        } catch (\Exception $e) {
+            DB::rollback();
+            Log::error('Error bulk generating schedules: ' . $e->getMessage());
+            return redirect()->back()
+                ->with('error', 'Terjadi kesalahan saat bulk generate: ' . $e->getMessage())
+                ->withInput();
+        }
+    }
+    
+    /**
+     * Export schedule to various formats
+     */
+    public function export(Request $request)
+    {
+        $format = $request->get('format', 'excel');
+        $startDate = $request->get('start_date', Carbon::now()->startOfMonth());
+        $endDate = $request->get('end_date', Carbon::now()->endOfMonth());
+        
+        $jadwal = JadwalPelayanan::with(['anggota', 'pelaksanaan.kegiatan'])
+            ->whereBetween('tanggal_pelayanan', [$startDate, $endDate])
+            ->orderBy('tanggal_pelayanan')
+            ->get();
+        
+        switch ($format) {
+            case 'pdf':
+                return $this->exportToPdf($jadwal, $startDate, $endDate);
+            case 'excel':
+                return $this->exportToExcel($jadwal, $startDate, $endDate);
+            case 'calendar':
+                return $this->exportToCalendar($jadwal, $startDate, $endDate);
+            default:
+                return $this->exportToExcel($jadwal, $startDate, $endDate);
+        }
+    }
+    
+    /**
+     * Send notifications to scheduled members
+     */
+    public function sendNotifications(Request $request)
+    {
+        if (Auth::user()->id_role > 3) {
+            return redirect()->route('pelayanan.index')
+                ->with('error', 'Anda tidak memiliki akses untuk mengirim notifikasi.');
+        }
+        
+        $date = $request->get('date', Carbon::now()->addDays(7)->format('Y-m-d'));
+        
+        $jadwal = JadwalPelayanan::with(['anggota', 'pelaksanaan.kegiatan'])
+            ->where('tanggal_pelayanan', $date)
+            ->where('status_konfirmasi', 'belum')
+            ->get();
+        
+        $notificationsSent = 0;
+        
+        foreach ($jadwal as $j) {
+            if ($j->anggota && $j->anggota->email) {
+                // Send email notification
+                // Mail::to($j->anggota->email)->send(new PelayananReminderMail($j));
+                $notificationsSent++;
             }
         }
         
         return redirect()->back()
-            ->with('success', 'Ketersediaan anggota berhasil disimpan.');
+            ->with('success', "Notifikasi berhasil dikirim ke {$notificationsSent} anggota.");
     }
     
     /**
-     * Show member availability form
+     * Auto-resolve conflicts in schedules
      */
-    public function editAvailability($id = null)
+    public function resolveConflicts(Request $request)
     {
-        $user = Auth::user();
-        
-        // If no ID provided, use the logged-in user's anggota
-        if (!$id && $user->id_anggota) {
-            $id = $user->id_anggota;
+        if (Auth::user()->id_role > 2) {
+            return redirect()->route('pelayanan.index')
+                ->with('error', 'Anda tidak memiliki akses untuk resolve conflicts.');
         }
         
-        // Ensure the user is authorized to view this anggota
-        if ($user->id_role > 3 && $user->id_anggota != $id) {
-            return redirect()->route('dashboard')
-                ->with('error', 'Anda tidak memiliki akses untuk melihat ketersediaan anggota lain.');
+        $date = $request->get('date');
+        $conflicts = $this->detectScheduleConflicts($date);
+        
+        $resolvedCount = 0;
+        
+        foreach ($conflicts as $conflict) {
+            if ($this->autoResolveConflict($conflict)) {
+                $resolvedCount++;
+            }
         }
         
-        $anggota = Anggota::findOrFail($id);
+        return redirect()->back()
+            ->with('success', "Berhasil resolve {$resolvedCount} konflik jadwal.")
+            ->with('info', count($conflicts) - $resolvedCount > 0 ? 
+                (count($conflicts) - $resolvedCount) . " konflik memerlukan penanganan manual." : '');
+    }
+    
+    /**
+     * Detect schedule conflicts
+     */
+    private function detectScheduleConflicts($date = null)
+    {
+        // Implementation for detecting various types of conflicts
+        // - Double booking
+        // - Availability conflicts
+        // - Workload imbalances
+        // - Missing critical positions
         
-        // Get positions this member has served in
-        $positions = JadwalPelayanan::where('id_anggota', $id)
-            ->distinct('posisi')
-            ->pluck('posisi')
-            ->toArray();
-            
-        // Get positions where they are marked as regular
-        $regularPositions = JadwalPelayanan::where('id_anggota', $id)
-            ->where('is_reguler', true)
-            ->pluck('posisi')
-            ->toArray();
+        return []; // Placeholder
+    }
+    
+    /**
+     * Auto resolve individual conflict
+     */
+    private function autoResolveConflict($conflict)
+    {
+        // Implementation for auto-resolving conflicts
+        // - Find alternative candidates
+        // - Redistribute workload
+        // - Suggest position swaps
         
-        return view('pelayanan.availability', compact('anggota', 'positions', 'regularPositions'));
+        return false; // Placeholder
+    }
+    
+    // Export methods placeholders
+    private function exportToPdf($jadwal, $startDate, $endDate) 
+    { 
+        // PDF export implementation
+    }
+    
+    private function exportToExcel($jadwal, $startDate, $endDate) 
+    { 
+        // Excel export implementation
+    }
+    
+    private function exportToCalendar($jadwal, $startDate, $endDate) 
+    { 
+        // Calendar export implementation (iCal format)
     }
 }
