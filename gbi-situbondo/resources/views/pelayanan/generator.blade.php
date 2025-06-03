@@ -1,14 +1,14 @@
 @extends('layouts.app')
 
-@section('title', 'Generator Jadwal Pelayanan Advanced')
+@section('title', 'Generator Jadwal Pelayanan')
 
 @section('content')
 <div class="container-fluid px-4">
-    <h1 class="mt-4">Generator Jadwal Pelayanan Advanced</h1>
+    <h1 class="mt-4">Generator Jadwal Pelayanan</h1>
     <ol class="breadcrumb mb-4">
         <li class="breadcrumb-item"><a href="{{ route('dashboard') }}">Dashboard</a></li>
         <li class="breadcrumb-item"><a href="{{ route('pelayanan.index') }}">Pelayanan</a></li>
-        <li class="breadcrumb-item active">Generator Advanced</li>
+        <li class="breadcrumb-item active">Generator</li>
     </ol>
     
     <div class="row">
@@ -16,7 +16,7 @@
             <div class="card mb-4">
                 <div class="card-header">
                     <i class="fas fa-magic me-1"></i>
-                    Generator Jadwal Pelayanan Otomatis Advanced
+                    Generator Jadwal Pelayanan Otomatis
                 </div>
                 <div class="card-body">
                     @if($errors->any())
@@ -77,13 +77,32 @@
                                             <label class="form-label">Kegiatan yang akan dijadwalkan:</label>
                                             <select class="form-select" name="id_pelaksanaan[]" id="pelaksanaan-select" multiple>
                                                 @foreach($pelaksanaan as $p)
-                                                    <option value="{{ $p->id_pelaksanaan }}">
+                                                    @php
+                                                        $tanggal = \Carbon\Carbon::parse($p->tanggal_kegiatan);
+                                                        $dayName = $tanggal->locale('id')->dayName;
+                                                        $jamMulai = \Carbon\Carbon::parse($p->jam_mulai)->format('H:i');
+                                                        $jamSelesai = \Carbon\Carbon::parse($p->jam_selesai)->format('H:i');
+                                                    @endphp
+                                                    <option value="{{ $p->id_pelaksanaan }}" 
+                                                            data-day="{{ $tanggal->dayOfWeek }}"
+                                                            data-start="{{ $jamMulai }}"
+                                                            data-end="{{ $jamSelesai }}"
+                                                            data-date="{{ $tanggal->format('Y-m-d') }}">
                                                         {{ $p->kegiatan->nama_kegiatan }} - 
-                                                        {{ \Carbon\Carbon::parse($p->tanggal_kegiatan)->format('d/m/Y') }} 
-                                                        {{ \Carbon\Carbon::parse($p->jam_mulai)->format('H:i') }}
+                                                        {{ $dayName }}, {{ $tanggal->format('d/m/Y') }} 
+                                                        ({{ $jamMulai }} - {{ $jamSelesai }})
                                                     </option>
                                                 @endforeach
                                             </select>
+                                            <small class="form-text text-muted">
+                                                Pilih satu atau lebih kegiatan. Informasi hari dan jam akan digunakan untuk mencocokkan ketersediaan anggota.
+                                            </small>
+                                        </div>
+                                        
+                                        <!-- Event Details Display -->
+                                        <div id="selected-events-info" class="mt-3" style="display: none;">
+                                            <h6>Detail Kegiatan Terpilih:</h6>
+                                            <div id="events-details"></div>
                                         </div>
                                     </div>
                                 </div>
@@ -117,7 +136,7 @@
                             </div>
                         </div>
                         
-                        <!-- Algorithm Selection -->
+                        <!-- Algorithm Selection - SIMPLIFIED -->
                         <div class="row mb-4">
                             <div class="col-md-12">
                                 <div class="card border-info">
@@ -128,33 +147,19 @@
                                         <div class="row">
                                             <div class="col-md-6">
                                                 <div class="form-check mb-3">
-                                                    <input class="form-check-input" type="radio" name="algorithm" id="balanced" value="balanced" checked>
-                                                    <label class="form-check-label" for="balanced">
-                                                        <strong>Balanced</strong><br>
-                                                        <small class="text-muted">Kombinasi seimbang antara reguler, rotasi, dan ketersediaan</small>
-                                                    </label>
-                                                </div>
-                                                <div class="form-check mb-3">
-                                                    <input class="form-check-input" type="radio" name="algorithm" id="regular_priority" value="regular_priority">
-                                                    <label class="form-check-label" for="regular_priority">
-                                                        <strong>Regular Priority</strong><br>
-                                                        <small class="text-muted">Mengutamakan pemain reguler untuk konsistensi pelayanan</small>
+                                                    <input class="form-check-input" type="radio" name="algorithm" id="fair_rotation" value="fair_rotation" checked>
+                                                    <label class="form-check-label" for="fair_rotation">
+                                                        <strong>Fair Rotation (Recommended)</strong><br>
+                                                        <small class="text-muted">Rotasi adil berdasarkan frekuensi pelayanan terakhir dan workload. Memberikan kesempatan yang sama kepada semua anggota.</small>
                                                     </label>
                                                 </div>
                                             </div>
                                             <div class="col-md-6">
                                                 <div class="form-check mb-3">
-                                                    <input class="form-check-input" type="radio" name="algorithm" id="fair_rotation" value="fair_rotation">
-                                                    <label class="form-check-label" for="fair_rotation">
-                                                        <strong>Fair Rotation</strong><br>
-                                                        <small class="text-muted">Rotasi adil untuk memberikan kesempatan yang sama</small>
-                                                    </label>
-                                                </div>
-                                                <div class="form-check mb-3">
-                                                    <input class="form-check-input" type="radio" name="algorithm" id="workload_based" value="workload_based">
-                                                    <label class="form-check-label" for="workload_based">
-                                                        <strong>Workload Based</strong><br>
-                                                        <small class="text-muted">Berdasarkan beban kerja untuk distribusi yang merata</small>
+                                                    <input class="form-check-input" type="radio" name="algorithm" id="regular_priority" value="regular_priority">
+                                                    <label class="form-check-label" for="regular_priority">
+                                                        <strong>Regular Priority</strong><br>
+                                                        <small class="text-muted">Mengutamakan pemain reguler untuk konsistensi pelayanan. Cocok untuk acara penting.</small>
                                                     </label>
                                                 </div>
                                             </div>
@@ -162,48 +167,13 @@
                                         
                                         <div class="row mt-3">
                                             <div class="col-md-6">
-                                                <div class="form-group">
-                                                    <label for="bobot_reguler" class="form-label">Bobot Pemain Reguler (1-10):</label>
-                                                    <input type="range" class="form-range" id="bobot_reguler" name="bobot_reguler" min="1" max="10" value="5">
-                                                    <div class="d-flex justify-content-between text-muted small">
-                                                        <span>1 (Minimal)</span>
-                                                        <span id="bobot-value">5</span>
-                                                        <span>10 (Maksimal)</span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div class="col-md-6">
-                                                <div class="form-check mt-4">
-                                                    <input class="form-check-input" type="checkbox" id="avoid_consecutive" name="avoid_consecutive" value="1">
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="checkbox" id="avoid_consecutive" name="avoid_consecutive" value="1" checked>
                                                     <label class="form-check-label" for="avoid_consecutive">
-                                                        Hindari jadwal berturut-turut untuk anggota yang sama
+                                                        Hindari jadwal berturut-turut (dalam 1 minggu) untuk anggota yang sama
                                                     </label>
                                                 </div>
                                             </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Template Selection -->
-                        <div class="row mb-4">
-                            <div class="col-md-12">
-                                <div class="card">
-                                    <div class="card-header">
-                                        <h5>Template Jadwal</h5>
-                                    </div>
-                                    <div class="card-body">
-                                        <div class="form-group mb-3">
-                                            <label class="form-label">Pilih Template (Opsional):</label>
-                                            <select class="form-select" name="template_id" id="template-select">
-                                                <option value="">-- Pilih Template atau Custom --</option>
-                                                @foreach($templates as $template)
-                                                    <option value="{{ $template->id }}" data-positions="{{ json_encode($template->posisi_required) }}">
-                                                        {{ $template->nama_template }} - {{ $template->deskripsi }}
-                                                    </option>
-                                                @endforeach
-                                            </select>
                                         </div>
                                     </div>
                                 </div>
@@ -251,7 +221,7 @@
                             </div>
                         </div>
                         
-                        <!-- Member Selection -->
+                        <!-- Member Selection with Availability Info -->
                         <div class="row mb-4">
                             <div class="col-md-12">
                                 <div class="card border-warning">
@@ -266,18 +236,28 @@
                                             </div>
                                         </div>
                                         
+                                        <!-- Availability Filter -->
+                                        <div class="mb-3">
+                                            <label class="form-label">Filter berdasarkan ketersediaan:</label>
+                                            <div class="btn-group" role="group">
+                                                <button type="button" class="btn btn-outline-primary btn-sm" id="filter-all-anggota">Semua</button>
+                                                <button type="button" class="btn btn-outline-success btn-sm" id="filter-available-anggota">Tersedia untuk Event Terpilih</button>
+                                                <button type="button" class="btn btn-outline-warning btn-sm" id="filter-weekend-anggota">Weekend Only</button>
+                                            </div>
+                                        </div>
+                                        
                                         <div class="row" id="anggota-list">
                                             @foreach($anggota->chunk(ceil($anggota->count() / 3)) as $chunk)
                                                 <div class="col-md-4">
                                                     @foreach($chunk as $a)
-                                                        <div class="form-check mb-2 anggota-item" data-name="{{ strtolower($a->nama) }}">
+                                                        <div class="form-check mb-2 anggota-item" data-name="{{ strtolower($a->nama) }}" data-id="{{ $a->id_anggota }}">
                                                             <input class="form-check-input anggota-checkbox" type="checkbox" 
                                                                 id="anggota_{{ $a->id_anggota }}" 
                                                                 name="anggota[]" 
                                                                 value="{{ $a->id_anggota }}" 
                                                                 checked>
                                                             <label class="form-check-label" for="anggota_{{ $a->id_anggota }}">
-                                                                {{ $a->nama }}
+                                                                <strong>{{ $a->nama }}</strong>
                                                                 
                                                                 @php
                                                                     $regularPositions = $a->spesialisasi
@@ -306,8 +286,15 @@
                                                                 @endphp
                                                                 
                                                                 @if($availability)
-                                                                    <br><small class="text-info">
+                                                                    <br><small class="text-info availability-info" data-days="{{ json_encode($a->ketersediaan_hari) }}" data-times="{{ json_encode($a->ketersediaan_jam) }}">
                                                                         <i class="fas fa-calendar"></i> {{ $availability }}
+                                                                        @if(!empty($a->ketersediaan_jam))
+                                                                            ({{ count($a->ketersediaan_jam) }} slot waktu)
+                                                                        @endif
+                                                                    </small>
+                                                                @else
+                                                                    <br><small class="text-warning">
+                                                                        <i class="fas fa-exclamation-triangle"></i> Ketersediaan belum diatur
                                                                     </small>
                                                                 @endif
                                                             </label>
@@ -321,7 +308,6 @@
                                             <button type="button" class="btn btn-sm btn-outline-secondary" id="select-all-anggota">Pilih Semua</button>
                                             <button type="button" class="btn btn-sm btn-outline-secondary" id="deselect-all-anggota">Batalkan Semua</button>
                                             <button type="button" class="btn btn-sm btn-outline-success" id="select-regular-anggota">Pilih Pemain Reguler</button>
-                                            <button type="button" class="btn btn-sm btn-outline-info" id="select-available-anggota">Pilih yang Available</button>
                                         </div>
                                     </div>
                                 </div>
@@ -337,19 +323,25 @@
                                     </div>
                                     <div class="card-body">
                                         <div class="row">
-                                            <div class="col-md-4">
+                                            <div class="col-md-3">
+                                                <div class="text-center">
+                                                    <h6>Events Dipilih</h6>
+                                                    <span class="badge bg-primary fs-6" id="events-count">0</span>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
                                                 <div class="text-center">
                                                     <h6>Posisi Dipilih</h6>
                                                     <span class="badge bg-success fs-6" id="positions-count">0</span>
                                                 </div>
                                             </div>
-                                            <div class="col-md-4">
+                                            <div class="col-md-3">
                                                 <div class="text-center">
                                                     <h6>Anggota Dipilih</h6>
                                                     <span class="badge bg-info fs-6" id="anggota-count">0</span>
                                                 </div>
                                             </div>
-                                            <div class="col-md-4">
+                                            <div class="col-md-3">
                                                 <div class="text-center">
                                                     <h6>Estimasi Kebutuhan</h6>
                                                     <span class="badge bg-warning fs-6" id="requirement-ratio">0:0</span>
@@ -358,38 +350,16 @@
                                         </div>
                                         
                                         <div class="mt-4 text-center">
-                                            <button type="button" class="btn btn-outline-primary me-2" id="preview-btn">
-                                                <i class="fas fa-eye"></i> Preview
-                                            </button>
-                                            <button type="submit" class="btn btn-primary">
+                                            <button type="submit" class="btn btn-primary btn-lg">
                                                 <i class="fas fa-magic"></i> Generate Jadwal
                                             </button>
-                                            <a href="{{ route('pelayanan.index') }}" class="btn btn-secondary ms-2">Batal</a>
+                                            <a href="{{ route('pelayanan.index') }}" class="btn btn-secondary btn-lg ms-2">Batal</a>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </form>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Preview Modal -->
-    <div class="modal fade" id="previewModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Preview Penjadwalan</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body" id="preview-content">
-                    <!-- Preview content will be loaded here -->
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
-                    <button type="button" class="btn btn-primary" onclick="$('#generator-form').submit()">Proses Generate</button>
                 </div>
             </div>
         </div>
@@ -406,11 +376,6 @@
             allowClear: true
         });
         
-        $('#template-select').select2({
-            placeholder: "Pilih Template",
-            allowClear: true
-        });
-        
         // Toggle configuration based on generation type
         $('input[name="generation_type"]').change(function() {
             if ($(this).val() === 'single') {
@@ -420,25 +385,43 @@
                 $('#single-config').hide();
                 $('#monthly-config').show();
             }
+            updateCounters();
         });
         
-        // Update bobot reguler display
-        $('#bobot_reguler').on('input', function() {
-            $('#bobot-value').text($(this).val());
-        });
-        
-        // Template selection auto-fill positions
-        $('#template-select').change(function() {
-            const selectedOption = $(this).find('option:selected');
-            const positions = selectedOption.data('positions');
-            
-            if (positions) {
-                $('.position-checkbox').prop('checked', false);
-                positions.forEach(function(position) {
-                    $(`input[value="${position}"]`).prop('checked', true);
+        // Show selected event details
+        $('#pelaksanaan-select').change(function() {
+            const selectedOptions = $(this).find('option:selected');
+            if (selectedOptions.length > 0) {
+                $('#selected-events-info').show();
+                let detailsHtml = '<div class="row">';
+                
+                selectedOptions.each(function() {
+                    const option = $(this);
+                    const day = option.data('day');
+                    const start = option.data('start');
+                    const end = option.data('end');
+                    const date = option.data('date');
+                    const dayNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+                    
+                    detailsHtml += `
+                        <div class="col-md-6 mb-2">
+                            <div class="alert alert-info py-2">
+                                <strong>${option.text()}</strong><br>
+                                <small>Hari: ${dayNames[day]} (${day}) | Jam: ${start} - ${end}</small>
+                            </div>
+                        </div>
+                    `;
                 });
-                updateCounters();
+                
+                detailsHtml += '</div>';
+                $('#events-details').html(detailsHtml);
+                
+                // Update availability filtering
+                updateAvailabilityFiltering();
+            } else {
+                $('#selected-events-info').hide();
             }
+            updateCounters();
         });
         
         // Position selection buttons
@@ -472,7 +455,7 @@
         
         // Member selection buttons
         $('#select-all-anggota').click(function() {
-            $('.anggota-checkbox').prop('checked', true);
+            $('.anggota-checkbox:visible').prop('checked', true);
             updateCounters();
         });
         
@@ -492,15 +475,31 @@
             updateCounters();
         });
         
-        $('#select-available-anggota').click(function() {
-            $('.anggota-checkbox').prop('checked', false);
-            $('.anggota-checkbox').each(function() {
-                const label = $(this).next('label');
-                if (label.find('.text-info').length > 0) {
-                    $(this).prop('checked', true);
+        // Availability filtering
+        $('#filter-all-anggota').click(function() {
+            $('.anggota-item').show();
+            $(this).addClass('active').siblings().removeClass('active');
+        });
+        
+        $('#filter-available-anggota').click(function() {
+            filterByAvailability();
+            $(this).addClass('active').siblings().removeClass('active');
+        });
+        
+        $('#filter-weekend-anggota').click(function() {
+            $('.anggota-item').hide();
+            $('.anggota-item').each(function() {
+                const availabilityInfo = $(this).find('.availability-info');
+                if (availabilityInfo.length > 0) {
+                    const days = JSON.parse(availabilityInfo.data('days') || '[]');
+                    if (days.includes(0) || days.includes(6)) { // Sunday or Saturday
+                        $(this).show();
+                    }
+                } else {
+                    $(this).show(); // Show if no availability set (assume available)
                 }
             });
-            updateCounters();
+            $(this).addClass('active').siblings().removeClass('active');
         });
         
         // Search functionality
@@ -521,18 +520,15 @@
             updateCounters();
         });
         
-        // Preview functionality
-        $('#preview-btn').click(function() {
-            generatePreview();
-        });
-        
         // Initialize counters
         updateCounters();
         
         function updateCounters() {
+            const eventsCount = $('#pelaksanaan-select').val() ? $('#pelaksanaan-select').val().length : 0;
             const positionsCount = $('.position-checkbox:checked').length;
             const anggotaCount = $('.anggota-checkbox:checked').length;
             
+            $('#events-count').text(eventsCount);
             $('#positions-count').text(positionsCount);
             $('#anggota-count').text(anggotaCount);
             
@@ -552,44 +548,69 @@
             }
         }
         
-        function generatePreview() {
-            const formData = new FormData($('#generator-form')[0]);
+        function updateAvailabilityFiltering() {
+            // This function will be called when events are selected
+            // to highlight members who are available for the selected events
+        }
+        
+        function filterByAvailability() {
+            const selectedEvents = $('#pelaksanaan-select').find('option:selected');
             
-            // Show loading
-            $('#preview-content').html('<div class="text-center"><i class="fas fa-spinner fa-spin"></i> Generating preview...</div>');
-            $('#previewModal').modal('show');
+            if (selectedEvents.length === 0) {
+                alert('Pilih kegiatan terlebih dahulu untuk filter ketersediaan');
+                return;
+            }
             
-            // Simulate preview generation (replace with actual AJAX call)
-            setTimeout(function() {
-                const positionsCount = $('.position-checkbox:checked').length;
-                const anggotaCount = $('.anggota-checkbox:checked').length;
-                const generationType = $('input[name="generation_type"]:checked').val();
-                const algorithm = $('input[name="algorithm"]:checked').val();
+            $('.anggota-item').each(function() {
+                const anggotaItem = $(this);
+                const availabilityInfo = anggotaItem.find('.availability-info');
+                let isAvailable = true;
                 
-                let previewHtml = `
-                    <div class="alert alert-info">
-                        <h6>Konfigurasi Preview:</h6>
-                        <ul class="mb-0">
-                            <li>Tipe: ${generationType === 'single' ? 'Single Event' : 'Bulk Monthly'}</li>
-                            <li>Algoritma: ${algorithm}</li>
-                            <li>Posisi: ${positionsCount} posisi</li>
-                            <li>Anggota: ${anggotaCount} anggota</li>
-                        </ul>
-                    </div>
+                if (availabilityInfo.length > 0) {
+                    const availableDays = JSON.parse(availabilityInfo.data('days') || '[]');
+                    const availableTimes = JSON.parse(availabilityInfo.data('times') || '[]');
                     
-                    <div class="alert alert-warning">
-                        <h6>Estimasi Hasil:</h6>
-                        <p>Berdasarkan konfigurasi ini, sistem akan mencoba mengalokasikan ${positionsCount} posisi dengan ${anggotaCount} anggota yang tersedia.</p>
+                    // Check if member is available for ANY of the selected events
+                    let availableForAnyEvent = false;
+                    
+                    selectedEvents.each(function() {
+                        const eventDay = $(this).data('day');
+                        const eventStart = $(this).data('start');
+                        const eventEnd = $(this).data('end');
                         
-                        ${anggotaCount / positionsCount < 1 ? 
-                            '<p class="text-danger"><i class="fas fa-exclamation-triangle"></i> Peringatan: Jumlah anggota kurang dari jumlah posisi yang dibutuhkan.</p>' : 
-                            '<p class="text-success"><i class="fas fa-check"></i> Jumlah anggota mencukupi untuk semua posisi.</p>'
+                        // Check day availability
+                        if (availableDays.includes(eventDay)) {
+                            // Check time availability
+                            if (availableTimes.length === 0) {
+                                availableForAnyEvent = true;
+                            } else {
+                                for (let timeSlot of availableTimes) {
+                                    const [slotStart, slotEnd] = timeSlot.split('-');
+                                    if (eventStart >= slotStart && eventEnd <= slotEnd) {
+                                        availableForAnyEvent = true;
+                                        break;
+                                    }
+                                }
+                            }
                         }
-                    </div>
-                `;
+                        
+                        if (availableForAnyEvent) return false; // Break out of loop
+                    });
+                    
+                    isAvailable = availableForAnyEvent;
+                } else {
+                    // If no availability set, assume available
+                    isAvailable = true;
+                }
                 
-                $('#preview-content').html(previewHtml);
-            }, 1000);
+                if (isAvailable) {
+                    anggotaItem.show();
+                    anggotaItem.removeClass('text-muted');
+                } else {
+                    anggotaItem.hide();
+                    anggotaItem.addClass('text-muted');
+                }
+            });
         }
     });
 </script>

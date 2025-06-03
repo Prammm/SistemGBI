@@ -9,7 +9,6 @@ use App\Models\JadwalPelayanan;
 use App\Models\PelaksanaanKegiatan;
 use App\Models\AnggotaSpesialisasi;
 use App\Models\SchedulingHistory;
-use App\Models\JadwalTemplate;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
@@ -150,15 +149,6 @@ class PelayananController extends Controller
         // Get available positions
         $posisiOptions = AnggotaSpesialisasi::getAvailablePositions();
         
-        // Prepare jadwal by position for editing
-        $jadwalByPosisi = [];
-        foreach ($existingJadwal as $jadwal) {
-            if (!isset($jadwalByPosisi[$jadwal->posisi])) {
-                $jadwalByPosisi[$jadwal->posisi] = [];
-            }
-            $jadwalByPosisi[$jadwal->posisi][] = $jadwal;
-        }
-        
         // Get all upcoming pelaksanaan
         $allPelaksanaan = PelaksanaanKegiatan::with('kegiatan')
             ->whereHas('kegiatan', function($q) {
@@ -173,11 +163,10 @@ class PelayananController extends Controller
             'allPelaksanaan', 
             'anggota', 
             'existingJadwal', 
-            'posisiOptions', 
-            'jadwalByPosisi'
+            'posisiOptions'
         ));
     }
-    
+
     public function store(Request $request)
     {
         if (Auth::user()->id_role > 3) {
@@ -272,7 +261,7 @@ class PelayananController extends Controller
     }
     
     /**
-     * Show generator form
+     * Show generator form - IMPROVED
      */
     public function showGenerator()
     {
@@ -300,17 +289,14 @@ class PelayananController extends Controller
             ->orderBy('nama')
             ->get();
         
-        // Get templates
-        $templates = JadwalTemplate::where('is_active', true)->get();
-        
         // Get position categories
         $positionCategories = AnggotaSpesialisasi::getPositionsByCategory();
         
-        return view('pelayanan.generator', compact('pelaksanaan', 'anggota', 'templates', 'positionCategories'));
+        return view('pelayanan.generator', compact('pelaksanaan', 'anggota', 'positionCategories'));
     }
     
     /**
-     * Advanced Generate Schedule with multiple algorithms
+     * Generate Schedule - SIMPLIFIED & IMPROVED
      */
     public function generateSchedule(Request $request)
     {
@@ -328,9 +314,7 @@ class PelayananController extends Controller
             'positions.*' => 'required|string',
             'anggota' => 'required|array',
             'anggota.*' => 'exists:anggota,id_anggota',
-            'algorithm' => 'required|in:balanced,regular_priority,fair_rotation,workload_based',
-            'bobot_reguler' => 'required|numeric|min:1|max:10',
-            'template_id' => 'nullable|exists:jadwal_template,id',
+            'algorithm' => 'required|in:fair_rotation,regular_priority',
             'avoid_consecutive' => 'sometimes|boolean',
             'max_services_per_month' => 'sometimes|integer|min:1|max:10',
         ]);
@@ -366,7 +350,7 @@ class PelayananController extends Controller
     }
     
     /**
-     * Generate single event schedule
+     * Generate single event schedule - IMPROVED
      */
     private function generateSingleSchedule(Request $request)
     {
@@ -374,7 +358,6 @@ class PelayananController extends Controller
         $positions = $request->positions;
         $selectedAnggota = $request->anggota;
         $algorithm = $request->algorithm;
-        $bobotReguler = $request->bobot_reguler;
         
         $totalScheduled = 0;
         $totalSkipped = 0;
@@ -395,7 +378,6 @@ class PelayananController extends Controller
                 $positions, 
                 $pelaksanaan, 
                 $algorithm,
-                $bobotReguler,
                 $request
             );
             
@@ -422,7 +404,7 @@ class PelayananController extends Controller
     }
     
     /**
-     * Generate monthly schedule
+     * Generate monthly schedule - IMPROVED
      */
     private function generateMonthlySchedule(Request $request)
     {
@@ -445,7 +427,6 @@ class PelayananController extends Controller
         $positions = $request->positions;
         $selectedAnggota = $request->anggota;
         $algorithm = $request->algorithm;
-        $bobotReguler = $request->bobot_reguler;
         $maxServicesPerMonth = $request->max_services_per_month ?? 3;
         
         // Track member workload for the month
@@ -474,7 +455,6 @@ class PelayananController extends Controller
                 $positions, 
                 $p, 
                 $algorithm,
-                $bobotReguler,
                 $request,
                 $memberWorkload
             );
@@ -503,9 +483,9 @@ class PelayananController extends Controller
     }
     
     /**
-     * Execute scheduling algorithm
+     * Execute scheduling algorithm - SIMPLIFIED TO 2 ALGORITHMS
      */
-    private function executeSchedulingAlgorithm($anggota, $positions, $pelaksanaan, $algorithm, $bobotReguler, $request, $workloadTracking = [])
+    private function executeSchedulingAlgorithm($anggota, $positions, $pelaksanaan, $algorithm, $request, $workloadTracking = [])
     {
         $scheduledPositions = [];
         $scheduledMembers = [];
@@ -518,7 +498,6 @@ class PelayananController extends Controller
                 $pelaksanaan, 
                 $scheduledMembers,
                 $algorithm,
-                $bobotReguler,
                 $workloadTracking
             );
             
@@ -569,9 +548,9 @@ class PelayananController extends Controller
     }
     
     /**
-     * Find eligible candidates with advanced algorithms
+     * Find eligible candidates - IMPROVED WITH BETTER AVAILABILITY CHECK
      */
-    private function findEligibleCandidates($anggota, $position, $pelaksanaan, $scheduledMembers, $algorithm, $bobotReguler, $workloadTracking = [])
+    private function findEligibleCandidates($anggota, $position, $pelaksanaan, $scheduledMembers, $algorithm, $workloadTracking = [])
     {
         $eventDay = Carbon::parse($pelaksanaan->tanggal_kegiatan)->dayOfWeek;
         $eventStart = $pelaksanaan->jam_mulai;
@@ -591,7 +570,7 @@ class PelayananController extends Controller
                 return false;
             }
             
-            // Check availability
+            // Check availability - IMPROVED
             if (!$anggota->isAvailable($eventDate, $eventStart, $eventEnd)) {
                 return false;
             }
@@ -604,15 +583,15 @@ class PelayananController extends Controller
         }
         
         // Apply algorithm-specific scoring
-        return $eligibleCandidates->sortByDesc(function ($anggota) use ($position, $algorithm, $bobotReguler, $workloadTracking) {
-            return $this->calculateCandidateScore($anggota, $position, $algorithm, $bobotReguler, $workloadTracking);
+        return $eligibleCandidates->sortByDesc(function ($anggota) use ($position, $algorithm, $workloadTracking) {
+            return $this->calculateCandidateScore($anggota, $position, $algorithm, $workloadTracking);
         });
     }
     
     /**
-     * Calculate candidate score based on algorithm
+     * Calculate candidate score - SIMPLIFIED TO 2 ALGORITHMS
      */
-    private function calculateCandidateScore($anggota, $position, $algorithm, $bobotReguler, $workloadTracking)
+    private function calculateCandidateScore($anggota, $position, $algorithm, $workloadTracking)
     {
         $score = 0;
         
@@ -627,42 +606,23 @@ class PelayananController extends Controller
             case 'regular_priority':
                 // Prioritize regular players
                 if ($isReguler) {
-                    $score += 100 + ($bobotReguler * 10);
+                    $score += 100;
                 }
-                $score += $prioritas * 5;
+                $score += $prioritas * 10;
                 $score += min($restDays / 7, 50); // Bonus for rest days
+                $score -= $serviceFrequency * 5; // Penalty for frequency
                 break;
                 
             case 'fair_rotation':
-                // Prioritize fair distribution
-                $score += max(100 - $serviceFrequency * 10, 0); // Less frequent = higher score
-                $score += min($restDays / 3, 100); // More rest = higher score
-                $score -= $currentWorkload * 20; // Less current workload = higher score
-                if ($isReguler) {
-                    $score += $bobotReguler * 5; // Moderate regular bonus
-                }
-                break;
-                
-            case 'workload_based':
-                // Balance workload
-                $score += max(200 - $currentWorkload * 50, 0); // Heavily favor low workload
-                $score -= $serviceFrequency * 5; // Slight penalty for frequency
-                $score += min($restDays / 7, 30); // Small rest bonus
-                if ($isReguler) {
-                    $score += $bobotReguler * 3; // Small regular bonus
-                }
-                break;
-                
-            case 'balanced':
             default:
-                // Balanced approach
+                // Prioritize fair distribution
+                $score += max(100 - $serviceFrequency * 15, 0); // High penalty for recent service
+                $score += min($restDays / 3, 100); // More rest = higher score
+                $score -= $currentWorkload * 30; // Heavy penalty for current workload
                 if ($isReguler) {
-                    $score += 50 + ($bobotReguler * 5);
+                    $score += 30; // Moderate regular bonus
                 }
-                $score += $prioritas * 3;
-                $score += min($restDays / 7, 70);
-                $score += max(50 - $serviceFrequency * 5, 0);
-                $score -= $currentWorkload * 10;
+                $score += $prioritas * 5;
                 break;
         }
         
@@ -684,7 +644,7 @@ class PelayananController extends Controller
             
         return $conflictingSchedules;
     }
-    
+
     /**
      * Manage member availability
      */
