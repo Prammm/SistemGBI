@@ -148,14 +148,13 @@
                                                     </select>
                                                 </div>
                                             </div>
+                                            <div class="col-md-3 d-flex align-items-end">
+                                                <button type="button" class="btn btn-danger btn-sm remove-petugas-row">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </div>
                                             <div class="col-md-2">
-                                                <div class="form-group">
-                                                    <label class="form-label">Regular</label>
-                                                    <div class="form-check mt-2">
-                                                        <input type="checkbox" class="form-check-input" name="petugas[{{ $loop->index }}][is_reguler]" value="1" {{ isset($jadwalByPosisi[$posisi]) && $jadwalByPosisi[$posisi]->is_reguler ? 'checked' : '' }}>
-                                                        <label class="form-check-label">Pemain Reguler</label>
-                                                    </div>
-                                                </div>
+
                                             </div>
                                         </div>
                                     @endforeach
@@ -191,6 +190,10 @@
             placeholder: "Pilih Anggota",
             allowClear: true,
             templateResult: formatAnggotaSelection
+        });
+
+        $('#petugas-container').on('click', '.remove-petugas-row', function() {
+            $(this).closest('.petugas-row').remove();
         });
         
         // Function to format anggota selection with availability and last served info
@@ -273,13 +276,6 @@
                         </div>
                     </div>
                     <div class="col-md-2">
-                        <div class="form-group">
-                            <label class="form-label">Regular</label>
-                            <div class="form-check mt-2">
-                                <input type="checkbox" class="form-check-input" name="petugas[${positionCounter}][is_reguler]" value="1">
-                                <label class="form-check-label">Pemain Reguler</label>
-                            </div>
-                        </div>
                     </div>
                 </div>
             `;
