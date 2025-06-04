@@ -184,13 +184,116 @@ Route::middleware(['auth'])->group(function () {
         })->name('api.preview-generate');
     });
 
+    // NEW: Enhanced Kehadiran Routes
+    Route::prefix('kehadiran')->name('kehadiran.')->group(function () {
+        // Existing routes
+        Route::get('scan/{id?}', [KehadiranController::class, 'scan'])->name('scan');
+        Route::get('scan-process/{id}', [KehadiranController::class, 'processQR'])->name('scan-process');
+        Route::get('laporan', [KehadiranController::class, 'laporan'])->name('laporan');
+        Route::post('laporan/generate', [KehadiranController::class, 'generateLaporan'])->name('laporan.generate');
+        
+        // NEW: Enhanced QR and Family Attendance Routes
+        Route::get('family-attendance/{id_pelaksanaan}', [KehadiranController::class, 'familyAttendance'])->name('family-attendance');
+        Route::post('store-family-attendance', [KehadiranController::class, 'storeFamilyAttendance'])->name('store-family-attendance');
+        
+        // NEW: Personal Reports with middleware protection
+        Route::get('personal-report', [KehadiranController::class, 'personalReport'])
+            ->name('personal-report')
+            ->middleware('attendance.access');
+        
+        Route::get('komsel-report', [KehadiranController::class, 'komselReport'])
+            ->name('komsel-report')
+            ->middleware('attendance.access');
+    });
+
+    // API Routes for QR Scanner
+    Route::prefix('api/kehadiran')->name('api.kehadiran.')->group(function () {
+        Route::post('validate-qr', function(\Illuminate\Http\Request $request) {
+            $user = \Illuminate\Support\Facades\Auth::user();
+            $qrData = $request->input('qr_data');
+            
+            // Validate QR format
+            if (!str_contains($qrData, 'kehadiran/scan-process/')) {
+                return response()->json(['valid' => false, 'message' => 'QR Code tidak valid']);
+            }
+            
+            // Extract pelaksanaan ID
+            preg_match('/scan-process\/(\d+)/', $qrData, $matches);
+            if (!isset($matches[1])) {
+                return response()->json(['valid' => false, 'message' => 'Format QR Code salah']);
+            }
+            
+            $pelaksanaanId = $matches[1];
+            $pelaksanaan = \App\Models\PelaksanaanKegiatan::find($pelaksanaanId);
+            
+            if (!$pelaksanaan) {
+                return response()->json(['valid' => false, 'message' => 'Kegiatan tidak ditemukan']);
+            }
+            
+            // Check if user can attend this event
+            if ($user->id_role > 3) {
+                $anggota = $user->anggota;
+                if (!$anggota) {
+                    return response()->json(['valid' => false, 'message' => 'Profil anggota tidak lengkap']);
+                }
+                
+                // Check if it's a komsel event and user is member
+                if ($pelaksanaan->kegiatan && $pelaksanaan->kegiatan->tipe_kegiatan == 'komsel') {
+                    $komselName = str_replace('Komsel - ', '', $pelaksanaan->kegiatan->nama_kegiatan);
+                    $isMember = $anggota->komsel->contains('nama_komsel', $komselName);
+                    
+                    if (!$isMember) {
+                        return response()->json(['valid' => false, 'message' => 'Anda bukan anggota komsel ini']);
+                    }
+                }
+            }
+            
+            return response()->json([
+                'valid' => true, 
+                'redirect_url' => route('kehadiran.scan-process', $pelaksanaanId),
+                'event_name' => $pelaksanaan->kegiatan->nama_kegiatan ?? 'Kegiatan'
+            ]);
+        })->name('validate-qr');
+        
+        Route::get('user-family/{pelaksanaan_id}', function($pelaksanaanId) {
+            $user = \Illuminate\Support\Facades\Auth::user();
+            
+            if (!$user->id_anggota) {
+                return response()->json(['family_members' => []]);
+            }
+            
+            $anggota = \App\Models\Anggota::find($user->id_anggota);
+            if (!$anggota || !$anggota->id_keluarga) {
+                return response()->json(['family_members' => []]);
+            }
+            
+            $familyMembers = \App\Models\Anggota::where('id_keluarga', $anggota->id_keluarga)
+                ->where('id_anggota', '!=', $anggota->id_anggota)
+                ->get()
+                ->map(function($member) use ($anggota, $pelaksanaanId) {
+                    $attended = \App\Models\Kehadiran::where('id_anggota', $member->id_anggota)
+                        ->where('id_pelaksanaan', $pelaksanaanId)
+                        ->exists();
+                    
+                    return [
+                        'id' => $member->id_anggota,
+                        'nama' => $member->nama,
+                        'hubungan' => $anggota->getHubunganDengan($member->id_anggota),
+                        'attended' => $attended
+                    ];
+                });
+            
+            return response()->json(['family_members' => $familyMembers]);
+        })->name('user-family');
+    });
+
     // Permission-based access to anggota
     Route::get('/anggota', [AnggotaController::class, 'index'])
         ->name('anggota.index')
         ->middleware(['auth', 'permission:view_anggota']);
 
     // Laporan routes
-    Route::prefix('laporan')->name('laporan.')->middleware(['auth'])->group(function () {
+    Route::prefix('laporan')->name('laporan.')->group(function () {
         Route::get('/', [LaporanController::class, 'index'])->name('index');
         Route::get('/kehadiran', [LaporanController::class, 'kehadiran'])->name('kehadiran');
         Route::get('/pelayanan', [LaporanController::class, 'pelayanan'])->name('pelayanan');
@@ -206,12 +309,6 @@ Route::middleware(['auth'])->group(function () {
     Route::post('keluarga/{keluarga}/add-member', [KeluargaController::class, 'addMember'])->name('keluarga.add-member');
     Route::delete('keluarga/{keluarga}/remove-member/{anggota}', [KeluargaController::class, 'removeMember'])->name('keluarga.remove-member');
     
-    // Kehadiran management
-    Route::get('kehadiran/scan/{id?}', [KehadiranController::class, 'scan'])->name('kehadiran.scan');
-    Route::get('kehadiran/scan-process/{id}', [KehadiranController::class, 'processQR'])->name('kehadiran.scan-process');
-    Route::get('kehadiran/laporan', [KehadiranController::class, 'laporan'])->name('kehadiran.laporan');
-    Route::post('kehadiran/laporan/generate', [KehadiranController::class, 'generateLaporan'])->name('kehadiran.laporan.generate');
-    
     // Komsel management
     Route::post('komsel/{komsel}/pertemuan', [KomselController::class, 'tambahPertemuan'])->name('komsel.tambah-pertemuan');
     Route::get('komsel/{komsel}/jadwalkan', [KomselController::class, 'jadwalkanPertemuan'])->name('komsel.jadwalkan');
@@ -224,3 +321,38 @@ Route::middleware(['auth'])->group(function () {
     Route::get('notifikasi/send-komsel', [NotifikasiController::class, 'sendKomselReminders'])->name('notifikasi.send-komsel');
     Route::get('notifikasi/send-ibadah', [NotifikasiController::class, 'sendIbadahReminders'])->name('notifikasi.send-ibadah');
 });
+
+// Helper function - MOVED OUTSIDE routes
+if (!function_exists('canAccessFeature')) {
+    function canAccessFeature($feature, $user = null) {
+        $user = $user ?: \Illuminate\Support\Facades\Auth::user();
+        
+        if (!$user) return false;
+        
+        switch ($feature) {
+            case 'manual_attendance':
+                return $user->id_role <= 3; // Admin, Pengurus, Petugas Pelayanan
+                
+            case 'view_all_members':
+                return $user->id_role <= 3;
+                
+            case 'personal_report':
+                return $user->id_anggota !== null;
+                
+            case 'komsel_report':
+                if (!$user->id_anggota) return false;
+                return \App\Models\Komsel::where('id_pemimpin', $user->id_anggota)->exists();
+                
+            case 'family_attendance':
+                if (!$user->id_anggota) return false;
+                $anggota = \App\Models\Anggota::find($user->id_anggota);
+                return $anggota && $anggota->id_keluarga && 
+                    \App\Models\Anggota::where('id_keluarga', $anggota->id_keluarga)
+                        ->where('id_anggota', '!=', $anggota->id_anggota)
+                        ->exists();
+                
+            default:
+                return false;
+        }
+    }
+}

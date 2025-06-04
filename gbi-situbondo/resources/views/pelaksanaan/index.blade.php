@@ -96,9 +96,6 @@
                                     <a href="{{ route('kehadiran.create', ['id_pelaksanaan' => $p->id_pelaksanaan]) }}" class="btn btn-success btn-sm">
                                         <i class="fas fa-clipboard-check"></i>
                                     </a>
-                                    <a href="{{ route('pelaksanaan.edit', $p->id_pelaksanaan) }}" class="btn btn-primary btn-sm">
-                                        <i class="fas fa-edit"></i>
-                                    </a>
                                     
                                     @if($p->is_recurring)
                                         <!-- Dropdown for recurring schedules -->

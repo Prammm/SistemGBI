@@ -121,9 +121,6 @@
                     @endif
                 </div>
                 <div class="card-footer">
-                    <a href="{{ route('pelaksanaan.edit', $pelaksanaan->id_pelaksanaan) }}" class="btn btn-primary">
-                        <i class="fas fa-edit"></i> Edit
-                    </a>
                     <a href="{{ route('kehadiran.create', ['id_pelaksanaan' => $pelaksanaan->id_pelaksanaan]) }}" class="btn btn-success">
                         <i class="fas fa-clipboard-check"></i> Presensi
                     </a>
