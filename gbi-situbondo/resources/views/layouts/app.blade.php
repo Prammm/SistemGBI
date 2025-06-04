@@ -197,42 +197,10 @@
                         
                         <div class="sb-sidenav-menu-heading"></div>
                         @if(Route::has('kehadiran.index'))
-                        <div class="nav">
-                            <a class="nav-link {{ request()->routeIs('kehadiran.*') ? 'active' : '' }}" href="{{ route('kehadiran.index') }}">
-                                <div class="sb-nav-link-icon"><i class="fas fa-clipboard-check"></i></div>
-                                Presensi
-                                @if(Auth::user()->id_anggota || Auth::user()->id_role <= 3)
-                                    <div class="sb-sidenav-collapse-arrow"><i class="fas fa-angle-down"></i></div>
-                                @endif
-                            </a>
-                            
-                            @if(Auth::user()->id_anggota || Auth::user()->id_role <= 3)
-                            <div class="collapse {{ request()->routeIs('kehadiran.*') ? 'show' : '' }}" id="kehadiranSubmenu">
-                                <nav class="sb-sidenav-menu-nested nav">
-                                    <a class="nav-link" href="{{ route('kehadiran.index') }}">
-                                        <i class="fas fa-list me-1"></i>Daftar Kegiatan
-                                    </a>
-                                    
-                                    @if(Auth::user()->id_anggota)
-                                    <a class="nav-link" href="{{ route('kehadiran.personal-report') }}">
-                                        <i class="fas fa-chart-user me-1"></i>Laporan Pribadi
-                                    </a>
-                                    @endif
-                                    
-                                    @php
-                                        $isKomselLeader = Auth::user()->id_anggota && 
-                                            \App\Models\Komsel::where('id_pemimpin', Auth::user()->id_anggota)->exists();
-                                    @endphp
-                                    
-                                    @if($isKomselLeader)
-                                    <a class="nav-link" href="{{ route('kehadiran.komsel-report') }}">
-                                        <i class="fas fa-users-crown me-1"></i>Laporan Komsel
-                                    </a>
-                                    @endif
-                                </nav>
-                            </div>
-                            @endif
-                        </div>
+                        <a class="nav-link {{ request()->routeIs('kehadiran.*') ? 'active' : '' }}" href="{{ route('kehadiran.index') }}">
+                            <div class="sb-nav-link-icon"><i class="fas fa-clipboard-check"></i></div>
+                            Presensi
+                        </a>
                         @endif
                         
                         @if(Route::has('laporan.index'))
