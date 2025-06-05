@@ -183,6 +183,22 @@
         padding: 25px;
         margin-bottom: 25px;
         box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+        position: relative;
+        height: 400px;
+    }
+    
+    .chart-wrapper {
+        position: relative;
+        height: 300px;
+        width: 100%;
+        overflow: hidden;
+    }
+    
+    .chart-wrapper canvas {
+        max-width: 100% !important;
+        max-height: 100% !important;
+        width: auto !important;
+        height: auto !important;
     }
     
     .activities-list {
@@ -265,6 +281,19 @@
         .filter-section > div {
             width: 100%;
         }
+        
+        .chart-section {
+            height: 350px;
+        }
+        
+        .chart-wrapper {
+            height: 250px;
+        }
+        
+        .chart-wrapper canvas {
+            max-width: 100% !important;
+            max-height: 100% !important;
+        }
     }
 </style>
 @endsection
@@ -274,7 +303,7 @@
     <h1 class="mt-4">Laporan Kehadiran Komsel</h1>
     <ol class="breadcrumb mb-4">
         <li class="breadcrumb-item"><a href="{{ route('dashboard') }}">Dashboard</a></li>
-        <li class="breadcrumb-item"><a href="{{ route('kehadiran.index') }}">Presensi Kehadiran</a></li>
+        <li class="breadcrumb-item"><a href="{{ route('laporan.index') }}">Laporan</a></li>
         <li class="breadcrumb-item active">Laporan Komsel</li>
     </ol>
     
@@ -299,7 +328,7 @@
     
     <div class="komsel-selector">
         <h5><i class="fas fa-filter me-2"></i>Filter Laporan</h5>
-        <form method="GET" action="{{ route('kehadiran.komsel-report') }}">
+        <form method="GET" action="{{ route('laporan.komsel-report') }}">
             <div class="filter-section">
                 @if($komselLead->count() > 1)
                     <div class="flex-fill">
@@ -342,12 +371,6 @@
             </div>
             <div class="stat-card">
                 <div class="stat-number">
-                    {{ $pelaksanaanKomsel->count() > 0 ? round($kehadiran->count() / $pelaksanaanKomsel->count(), 1) : 0 }}
-                </div>
-                <div class="stat-label">Rata-rata per Pertemuan</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number">
                     {{ $selectedKomsel->anggota->count() > 0 ? round((array_sum(array_column($attendanceStats, 'persentase')) / count($attendanceStats)), 1) : 0 }}%
                 </div>
                 <div class="stat-label">Rata-rata Kehadiran</div>
@@ -365,7 +388,7 @@
                         } elseif ($percentage >= 75) {
                             $statusClass = 'status-good';
                             $statusText = 'Baik';
-                        } elseif ($percentage >= 50) {
+                        } elseif ($percentage >= 75) {
                             $statusClass = 'status-fair';
                             $statusText = 'Cukup';
                         } else {
@@ -416,13 +439,17 @@
             <div class="col-lg-6">
                 <div class="chart-section">
                     <h5><i class="fas fa-chart-line me-2"></i>Tren Kehadiran per Pertemuan</h5>
-                    <canvas id="attendanceTrendChart" width="400" height="300"></canvas>
+                    <div class="chart-wrapper">
+                        <canvas id="attendanceTrendChart"></canvas>
+                    </div>
                 </div>
             </div>
             <div class="col-lg-6">
                 <div class="chart-section">
                     <h5><i class="fas fa-chart-bar me-2"></i>Distribusi Kehadiran Anggota</h5>
-                    <canvas id="memberDistributionChart" width="400" height="300"></canvas>
+                    <div class="chart-wrapper">
+                        <canvas id="memberDistributionChart"></canvas>
+                    </div>
                 </div>
             </div>
         </div>
@@ -481,7 +508,7 @@
         <button onclick="window.print()" class="btn btn-outline-warning">
             <i class="fas fa-print me-2"></i>Cetak Laporan
         </button>
-        <a href="{{ route('kehadiran.index') }}" class="btn btn-secondary ms-2">
+        <a href="{{ route('laporan.index') }}" class="btn btn-secondary ms-2">
             <i class="fas fa-arrow-left me-2"></i>Kembali
         </a>
     </div>
@@ -492,125 +519,152 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Variabel untuk menyimpan instance chart
+    let attendanceTrendChart = null;
+    let memberDistributionChart = null;
+    
+    // Function untuk menghancurkan chart yang sudah ada
+    function destroyExistingCharts() {
+        if (attendanceTrendChart) {
+            attendanceTrendChart.destroy();
+            attendanceTrendChart = null;
+        }
+        if (memberDistributionChart) {
+            memberDistributionChart.destroy();
+            memberDistributionChart = null;
+        }
+    }
+    
     @if($pelaksanaanKomsel->count() > 0)
         // Attendance trend chart
-        const trendCtx = document.getElementById('attendanceTrendChart').getContext('2d');
-        const meetings = @json($pelaksanaanKomsel->map(function($p) {
-            return [
-                'date' => $p->tanggal_kegiatan,
-                'attendance' => $kehadiran->where('id_pelaksanaan', $p->id_pelaksanaan)->count()
-            ];
-        }));
-        
-        const trendLabels = meetings.map(m => {
-            const date = new Date(m.date);
-            return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
-        });
-        const trendData = meetings.map(m => m.attendance);
-        
-        new Chart(trendCtx, {
-            type: 'line',
-            data: {
-                labels: trendLabels,
-                datasets: [{
-                    label: 'Jumlah Kehadiran',
-                    data: trendData,
-                    backgroundColor: 'rgba(246, 194, 62, 0.1)',
-                    borderColor: 'rgba(246, 194, 62, 1)',
-                    borderWidth: 3,
-                    fill: true,
-                    tension: 0.4,
-                    pointBackgroundColor: 'rgba(246, 194, 62, 1)',
-                    pointBorderColor: '#fff',
-                    pointBorderWidth: 2,
-                    pointRadius: 6
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        display: false
-                    }
+        const trendCtx = document.getElementById('attendanceTrendChart');
+        if (trendCtx) {
+            const ctx = trendCtx.getContext('2d');
+            const meetings = @json($pelaksanaanKomsel->map(function($p) use ($kehadiran) {
+                return [
+                    'date' => $p->tanggal_kegiatan,
+                    'attendance' => $kehadiran->where('id_pelaksanaan', $p->id_pelaksanaan)->count()
+                ];
+            }));
+            
+            const trendLabels = meetings.map(m => {
+                const date = new Date(m.date);
+                return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
+            });
+            const trendData = meetings.map(m => m.attendance);
+            
+            attendanceTrendChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: trendLabels,
+                    datasets: [{
+                        label: 'Jumlah Kehadiran',
+                        data: trendData,
+                        backgroundColor: 'rgba(246, 194, 62, 0.1)',
+                        borderColor: 'rgba(246, 194, 62, 1)',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4,
+                        pointBackgroundColor: 'rgba(246, 194, 62, 1)',
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 2,
+                        pointRadius: 6
+                    }]
                 },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        max: {{ $selectedKomsel->anggota->count() }},
-                        ticks: {
-                            precision: 0
-                        },
-                        grid: {
-                            color: 'rgba(0,0,0,0.05)'
-                        }
-                    },
-                    x: {
-                        grid: {
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
                             display: false
                         }
-                    }
-                }
-            }
-        });
-        
-        // Member distribution chart
-        const distributionCtx = document.getElementById('memberDistributionChart').getContext('2d');
-        const attendanceStats = @json($attendanceStats);
-        
-        const memberNames = Object.values(attendanceStats).map(stat => stat.anggota.nama.split(' ')[0]);
-        const memberPercentages = Object.values(attendanceStats).map(stat => stat.persentase);
-        
-        // Generate colors based on performance
-        const memberColors = memberPercentages.map(percentage => {
-            if (percentage >= 90) return 'rgba(40, 167, 69, 0.8)';
-            if (percentage >= 75) return 'rgba(54, 185, 204, 0.8)';
-            if (percentage >= 50) return 'rgba(246, 194, 62, 0.8)';
-            return 'rgba(220, 53, 69, 0.8)';
-        });
-        
-        new Chart(distributionCtx, {
-            type: 'bar',
-            data: {
-                labels: memberNames,
-                datasets: [{
-                    label: 'Persentase Kehadiran',
-                    data: memberPercentages,
-                    backgroundColor: memberColors,
-                    borderColor: memberColors.map(color => color.replace('0.8', '1')),
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        display: false
-                    }
-                },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        max: 100,
-                        ticks: {
-                            callback: function(value) {
-                                return value + '%';
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: {{ $selectedKomsel->anggota->count() }},
+                            ticks: {
+                                precision: 0
+                            },
+                            grid: {
+                                color: 'rgba(0,0,0,0.05)'
                             }
                         },
-                        grid: {
-                            color: 'rgba(0,0,0,0.05)'
-                        }
-                    },
-                    x: {
-                        grid: {
-                            display: false
+                        x: {
+                            grid: {
+                                display: false
+                            }
                         }
                     }
                 }
-            }
-        });
+            });
+        }
+        
+        // Member distribution chart
+        const distributionCtx = document.getElementById('memberDistributionChart');
+        if (distributionCtx) {
+            const ctx = distributionCtx.getContext('2d');
+            const attendanceStats = @json($attendanceStats);
+            
+            const memberNames = Object.values(attendanceStats).map(stat => stat.anggota.nama.split(' ')[0]);
+            const memberPercentages = Object.values(attendanceStats).map(stat => stat.persentase);
+            
+            // Generate colors based on performance
+            const memberColors = memberPercentages.map(percentage => {
+                if (percentage >= 90) return 'rgba(40, 167, 69, 0.8)';
+                if (percentage >= 75) return 'rgba(54, 185, 204, 0.8)';
+                if (percentage >= 50) return 'rgba(246, 194, 62, 0.8)';
+                return 'rgba(220, 53, 69, 0.8)';
+            });
+            
+            memberDistributionChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: memberNames,
+                    datasets: [{
+                        label: 'Persentase Kehadiran',
+                        data: memberPercentages,
+                        backgroundColor: memberColors,
+                        borderColor: memberColors.map(color => color.replace('0.8', '1')),
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: {
+                                callback: function(value) {
+                                    return value + '%';
+                                }
+                            },
+                            grid: {
+                                color: 'rgba(0,0,0,0.05)'
+                            }
+                        },
+                        x: {
+                            grid: {
+                                display: false
+                            }
+                        }
+                    }
+                }
+            });
+        }
     @endif
+    
+    // Cleanup saat halaman akan ditinggalkan
+    window.addEventListener('beforeunload', function() {
+        destroyExistingCharts();
+    });
 });
 </script>
 @endsection

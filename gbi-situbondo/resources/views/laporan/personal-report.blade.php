@@ -55,6 +55,8 @@
         padding: 25px;
         margin-bottom: 20px;
         box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+        position: relative;
+        height: 400px; /* Fixed height untuk mencegah pertumbuhan tidak terkendali */
     }
     
     .chart-title {
@@ -64,6 +66,20 @@
         margin-bottom: 20px;
         padding-bottom: 10px;
         border-bottom: 2px solid #f8f9fa;
+    }
+    
+    .chart-wrapper {
+        position: relative;
+        height: 300px; /* Fixed height untuk wrapper canvas */
+        width: 100%;
+        overflow: hidden; /* Mencegah canvas keluar dari container */
+    }
+    
+    .chart-wrapper canvas {
+        max-width: 100% !important;
+        max-height: 100% !important;
+        width: auto !important;
+        height: auto !important;
     }
     
     .attendance-list {
@@ -196,7 +212,7 @@
         font-size: 0.95rem;
     }
     
-    @media (max-width: 768px) {
+            @media (max-width: 768px) {
         .report-header {
             padding: 20px;
         }
@@ -217,6 +233,19 @@
         .period-btn {
             flex: 1;
             min-width: 80px;
+        }
+        
+        .chart-container {
+            height: 350px; /* Reduce height untuk mobile */
+        }
+        
+        .chart-wrapper {
+            height: 250px; /* Reduce height untuk mobile */
+        }
+        
+        .chart-wrapper canvas {
+            max-width: 100% !important;
+            max-height: 100% !important;
         }
     }
 </style>
@@ -297,7 +326,9 @@
                     <div class="chart-title">
                         <i class="fas fa-chart-line me-2"></i>Tren Kehadiran per Bulan
                     </div>
-                    <canvas id="monthlyChart" width="400" height="300"></canvas>
+                    <div class="chart-wrapper">
+                        <canvas id="monthlyChart"></canvas>
+                    </div>
                 </div>
             </div>
             <div class="col-lg-6">
@@ -305,7 +336,9 @@
                     <div class="chart-title">
                         <i class="fas fa-chart-pie me-2"></i>Kehadiran per Jenis Kegiatan
                     </div>
-                    <canvas id="activityChart" width="400" height="300"></canvas>
+                    <div class="chart-wrapper">
+                        <canvas id="activityChart"></canvas>
+                    </div>
                 </div>
             </div>
         </div>
@@ -371,126 +404,151 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Variabel untuk menyimpan instance chart
+    let monthlyChart = null;
+    let activityChart = null;
+    
+    // Function untuk menghancurkan chart yang sudah ada
+    function destroyExistingCharts() {
+        if (monthlyChart) {
+            monthlyChart.destroy();
+            monthlyChart = null;
+        }
+        if (activityChart) {
+            activityChart.destroy();
+            activityChart = null;
+        }
+    }
+    
     @if($totalKehadiran > 0)
         // Monthly attendance chart
-        const monthlyCtx = document.getElementById('monthlyChart').getContext('2d');
-        const monthlyData = @json($kehadiranPerBulan);
-        
-        const monthlyLabels = [];
-        const monthlyValues = [];
-        
-        // Generate labels for all months in the period
-        const startDate = new Date('{{ $startDate->format('Y-m-d') }}');
-        const endDate = new Date('{{ $endDate->format('Y-m-d') }}');
-        
-        let currentDate = new Date(startDate);
-        currentDate.setDate(1); // Set to first day of month
-        
-        while (currentDate <= endDate) {
-            const monthKey = currentDate.getFullYear() + '-' + String(currentDate.getMonth() + 1).padStart(2, '0');
-            const monthLabel = currentDate.toLocaleDateString('id-ID', { month: 'short', year: 'numeric' });
+        const monthlyCtx = document.getElementById('monthlyChart');
+        if (monthlyCtx) {
+            const ctx = monthlyCtx.getContext('2d');
+            const monthlyData = @json($kehadiranPerBulan);
             
-            monthlyLabels.push(monthLabel);
-            monthlyValues.push(monthlyData[monthKey] || 0);
+            const monthlyLabels = [];
+            const monthlyValues = [];
             
-            // Move to next month
-            currentDate.setMonth(currentDate.getMonth() + 1);
-        }
-        
-        new Chart(monthlyCtx, {
-            type: 'line',
-            data: {
-                labels: monthlyLabels,
-                datasets: [{
-                    label: 'Kehadiran',
-                    data: monthlyValues,
-                    backgroundColor: 'rgba(102, 126, 234, 0.1)',
-                    borderColor: 'rgba(102, 126, 234, 1)',
-                    borderWidth: 3,
-                    fill: true,
-                    tension: 0.4,
-                    pointBackgroundColor: 'rgba(102, 126, 234, 1)',
-                    pointBorderColor: '#fff',
-                    pointBorderWidth: 2,
-                    pointRadius: 6
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        display: false
-                    }
+            // Generate labels for all months in the period
+            const startDate = new Date('{{ $startDate->format('Y-m-d') }}');
+            const endDate = new Date('{{ $endDate->format('Y-m-d') }}');
+            
+            let currentDate = new Date(startDate);
+            currentDate.setDate(1); // Set to first day of month
+            
+            while (currentDate <= endDate) {
+                const monthKey = currentDate.getFullYear() + '-' + String(currentDate.getMonth() + 1).padStart(2, '0');
+                const monthLabel = currentDate.toLocaleDateString('id-ID', { month: 'short', year: 'numeric' });
+                
+                monthlyLabels.push(monthLabel);
+                monthlyValues.push(monthlyData[monthKey] || 0);
+                
+                // Move to next month
+                currentDate.setMonth(currentDate.getMonth() + 1);
+            }
+            
+            monthlyChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: monthlyLabels,
+                    datasets: [{
+                        label: 'Kehadiran',
+                        data: monthlyValues,
+                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                        borderColor: 'rgba(102, 126, 234, 1)',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4,
+                        pointBackgroundColor: 'rgba(102, 126, 234, 1)',
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 2,
+                        pointRadius: 6
+                    }]
                 },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: {
-                            precision: 0
-                        },
-                        grid: {
-                            color: 'rgba(0,0,0,0.05)'
-                        }
-                    },
-                    x: {
-                        grid: {
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
                             display: false
                         }
-                    }
-                }
-            }
-        });
-        
-        // Activity type chart
-        const activityCtx = document.getElementById('activityChart').getContext('2d');
-        const activityData = @json($kehadiranPerKegiatan);
-        
-        const activityLabels = Object.keys(activityData);
-        const activityValues = Object.values(activityData);
-        
-        // Generate colors for activities
-        const colors = [
-            'rgba(102, 126, 234, 0.8)',
-            'rgba(118, 75, 162, 0.8)',
-            'rgba(255, 99, 132, 0.8)',
-            'rgba(54, 162, 235, 0.8)',
-            'rgba(255, 205, 86, 0.8)',
-            'rgba(75, 192, 192, 0.8)',
-            'rgba(153, 102, 255, 0.8)',
-            'rgba(255, 159, 64, 0.8)'
-        ];
-        
-        new Chart(activityCtx, {
-            type: 'doughnut',
-            data: {
-                labels: activityLabels,
-                datasets: [{
-                    data: activityValues,
-                    backgroundColor: colors.slice(0, activityLabels.length),
-                    borderWidth: 2,
-                    borderColor: '#fff'
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        position: 'bottom',
-                        labels: {
-                            padding: 20,
-                            usePointStyle: true
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                precision: 0
+                            },
+                            grid: {
+                                color: 'rgba(0,0,0,0.05)'
+                            }
+                        },
+                        x: {
+                            grid: {
+                                display: false
+                            }
                         }
                     }
                 }
-            }
-        });
+            });
+        }
+        
+        // Activity type chart
+        const activityCtx = document.getElementById('activityChart');
+        if (activityCtx) {
+            const ctx = activityCtx.getContext('2d');
+            const activityData = @json($kehadiranPerKegiatan);
+            
+            const activityLabels = Object.keys(activityData);
+            const activityValues = Object.values(activityData);
+            
+            // Generate colors for activities
+            const colors = [
+                'rgba(102, 126, 234, 0.8)',
+                'rgba(118, 75, 162, 0.8)',
+                'rgba(255, 99, 132, 0.8)',
+                'rgba(54, 162, 235, 0.8)',
+                'rgba(255, 205, 86, 0.8)',
+                'rgba(75, 192, 192, 0.8)',
+                'rgba(153, 102, 255, 0.8)',
+                'rgba(255, 159, 64, 0.8)'
+            ];
+            
+            activityChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: activityLabels,
+                    datasets: [{
+                        data: activityValues,
+                        backgroundColor: colors.slice(0, activityLabels.length),
+                        borderWidth: 2,
+                        borderColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                padding: 20,
+                                usePointStyle: true
+                            }
+                        }
+                    }
+                }
+            });
+        }
     @endif
     
     // Period selector
     document.querySelectorAll('.period-btn').forEach(btn => {
         btn.addEventListener('click', function() {
+            // Hancurkan chart sebelum navigasi
+            destroyExistingCharts();
+            
             const period = this.dataset.period;
             const url = new URL(window.location);
             url.searchParams.set('period', period);
@@ -507,6 +565,11 @@ document.addEventListener('DOMContentLoaded', function() {
         if (btn.dataset.period === currentPeriod) {
             btn.classList.add('active');
         }
+    });
+    
+    // Cleanup saat halaman akan ditinggalkan
+    window.addEventListener('beforeunload', function() {
+        destroyExistingCharts();
     });
 });
 </script>

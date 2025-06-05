@@ -55,6 +55,8 @@
         padding: 25px;
         margin-bottom: 20px;
         box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+        position: relative;
+        height: 400px; /* Fixed height untuk mencegah pertumbuhan tidak terkendali */
     }
     
     .chart-title {
@@ -64,6 +66,20 @@
         margin-bottom: 20px;
         padding-bottom: 10px;
         border-bottom: 2px solid #f8f9fa;
+    }
+    
+    .chart-wrapper {
+        position: relative;
+        height: 300px; /* Fixed height untuk wrapper canvas */
+        width: 100%;
+        overflow: hidden; /* Mencegah canvas keluar dari container */
+    }
+    
+    .chart-wrapper canvas {
+        max-width: 100% !important;
+        max-height: 100% !important;
+        width: auto !important;
+        height: auto !important;
     }
     
     .service-list {
@@ -208,7 +224,7 @@
         font-size: 0.95rem;
     }
     
-    @media (max-width: 768px) {
+            @media (max-width: 768px) {
         .report-header {
             padding: 20px;
         }
@@ -229,6 +245,19 @@
         .period-btn {
             flex: 1;
             min-width: 80px;
+        }
+        
+        .chart-container {
+            height: 350px; /* Reduce height untuk mobile */
+        }
+        
+        .chart-wrapper {
+            height: 250px; /* Reduce height untuk mobile */
+        }
+        
+        .chart-wrapper canvas {
+            max-width: 100% !important;
+            max-height: 100% !important;
         }
     }
 </style>
@@ -307,7 +336,9 @@
                     <div class="chart-title">
                         <i class="fas fa-chart-line me-2"></i>Tren Pelayanan per Bulan
                     </div>
-                    <canvas id="monthlyChart" width="400" height="300"></canvas>
+                    <div class="chart-wrapper">
+                        <canvas id="monthlyChart"></canvas>
+                    </div>
                 </div>
             </div>
             <div class="col-lg-6">
@@ -315,7 +346,9 @@
                     <div class="chart-title">
                         <i class="fas fa-chart-pie me-2"></i>Pelayanan per Posisi
                     </div>
-                    <canvas id="positionChart" width="400" height="300"></canvas>
+                    <div class="chart-wrapper">
+                        <canvas id="positionChart"></canvas>
+                    </div>
                 </div>
             </div>
         </div>
@@ -386,126 +419,151 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Variabel untuk menyimpan instance chart
+    let monthlyChart = null;
+    let positionChart = null;
+    
+    // Function untuk menghancurkan chart yang sudah ada
+    function destroyExistingCharts() {
+        if (monthlyChart) {
+            monthlyChart.destroy();
+            monthlyChart = null;
+        }
+        if (positionChart) {
+            positionChart.destroy();
+            positionChart = null;
+        }
+    }
+    
     @if($totalPelayanan > 0)
         // Monthly service chart
-        const monthlyCtx = document.getElementById('monthlyChart').getContext('2d');
-        const monthlyData = @json($pelayananPerBulan);
-        
-        const monthlyLabels = [];
-        const monthlyValues = [];
-        
-        // Generate labels for all months in the period
-        const startDate = new Date('{{ $startDate->format('Y-m-d') }}');
-        const endDate = new Date('{{ $endDate->format('Y-m-d') }}');
-        
-        let currentDate = new Date(startDate);
-        currentDate.setDate(1); // Set to first day of month
-        
-        while (currentDate <= endDate) {
-            const monthKey = currentDate.getFullYear() + '-' + String(currentDate.getMonth() + 1).padStart(2, '0');
-            const monthLabel = currentDate.toLocaleDateString('id-ID', { month: 'short', year: 'numeric' });
+        const monthlyCtx = document.getElementById('monthlyChart');
+        if (monthlyCtx) {
+            const ctx = monthlyCtx.getContext('2d');
+            const monthlyData = @json($pelayananPerBulan);
             
-            monthlyLabels.push(monthLabel);
-            monthlyValues.push(monthlyData[monthKey] || 0);
+            const monthlyLabels = [];
+            const monthlyValues = [];
             
-            // Move to next month
-            currentDate.setMonth(currentDate.getMonth() + 1);
-        }
-        
-        new Chart(monthlyCtx, {
-            type: 'line',
-            data: {
-                labels: monthlyLabels,
-                datasets: [{
-                    label: 'Pelayanan',
-                    data: monthlyValues,
-                    backgroundColor: 'rgba(28, 200, 138, 0.1)',
-                    borderColor: 'rgba(28, 200, 138, 1)',
-                    borderWidth: 3,
-                    fill: true,
-                    tension: 0.4,
-                    pointBackgroundColor: 'rgba(28, 200, 138, 1)',
-                    pointBorderColor: '#fff',
-                    pointBorderWidth: 2,
-                    pointRadius: 6
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        display: false
-                    }
+            // Generate labels for all months in the period
+            const startDate = new Date('{{ $startDate->format('Y-m-d') }}');
+            const endDate = new Date('{{ $endDate->format('Y-m-d') }}');
+            
+            let currentDate = new Date(startDate);
+            currentDate.setDate(1); // Set to first day of month
+            
+            while (currentDate <= endDate) {
+                const monthKey = currentDate.getFullYear() + '-' + String(currentDate.getMonth() + 1).padStart(2, '0');
+                const monthLabel = currentDate.toLocaleDateString('id-ID', { month: 'short', year: 'numeric' });
+                
+                monthlyLabels.push(monthLabel);
+                monthlyValues.push(monthlyData[monthKey] || 0);
+                
+                // Move to next month
+                currentDate.setMonth(currentDate.getMonth() + 1);
+            }
+            
+            monthlyChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: monthlyLabels,
+                    datasets: [{
+                        label: 'Pelayanan',
+                        data: monthlyValues,
+                        backgroundColor: 'rgba(28, 200, 138, 0.1)',
+                        borderColor: 'rgba(28, 200, 138, 1)',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4,
+                        pointBackgroundColor: 'rgba(28, 200, 138, 1)',
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 2,
+                        pointRadius: 6
+                    }]
                 },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: {
-                            precision: 0
-                        },
-                        grid: {
-                            color: 'rgba(0,0,0,0.05)'
-                        }
-                    },
-                    x: {
-                        grid: {
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
                             display: false
                         }
-                    }
-                }
-            }
-        });
-        
-        // Position chart
-        const positionCtx = document.getElementById('positionChart').getContext('2d');
-        const positionData = @json($pelayananPerPosisi);
-        
-        const positionLabels = Object.keys(positionData);
-        const positionValues = Object.values(positionData);
-        
-        // Generate colors for positions
-        const colors = [
-            'rgba(28, 200, 138, 0.8)',
-            'rgba(78, 115, 223, 0.8)',
-            'rgba(246, 194, 62, 0.8)',
-            'rgba(231, 74, 59, 0.8)',
-            'rgba(54, 185, 204, 0.8)',
-            'rgba(153, 102, 255, 0.8)',
-            'rgba(255, 159, 64, 0.8)',
-            'rgba(75, 192, 192, 0.8)'
-        ];
-        
-        new Chart(positionCtx, {
-            type: 'doughnut',
-            data: {
-                labels: positionLabels,
-                datasets: [{
-                    data: positionValues,
-                    backgroundColor: colors.slice(0, positionLabels.length),
-                    borderWidth: 2,
-                    borderColor: '#fff'
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        position: 'bottom',
-                        labels: {
-                            padding: 20,
-                            usePointStyle: true
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                precision: 0
+                            },
+                            grid: {
+                                color: 'rgba(0,0,0,0.05)'
+                            }
+                        },
+                        x: {
+                            grid: {
+                                display: false
+                            }
                         }
                     }
                 }
-            }
-        });
+            });
+        }
+        
+        // Position chart
+        const positionCtx = document.getElementById('positionChart');
+        if (positionCtx) {
+            const ctx = positionCtx.getContext('2d');
+            const positionData = @json($pelayananPerPosisi);
+            
+            const positionLabels = Object.keys(positionData);
+            const positionValues = Object.values(positionData);
+            
+            // Generate colors for positions
+            const colors = [
+                'rgba(28, 200, 138, 0.8)',
+                'rgba(78, 115, 223, 0.8)',
+                'rgba(246, 194, 62, 0.8)',
+                'rgba(231, 74, 59, 0.8)',
+                'rgba(54, 185, 204, 0.8)',
+                'rgba(153, 102, 255, 0.8)',
+                'rgba(255, 159, 64, 0.8)',
+                'rgba(75, 192, 192, 0.8)'
+            ];
+            
+            positionChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: positionLabels,
+                    datasets: [{
+                        data: positionValues,
+                        backgroundColor: colors.slice(0, positionLabels.length),
+                        borderWidth: 2,
+                        borderColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                padding: 20,
+                                usePointStyle: true
+                            }
+                        }
+                    }
+                }
+            });
+        }
     @endif
     
     // Period selector
     document.querySelectorAll('.period-btn').forEach(btn => {
         btn.addEventListener('click', function() {
+            // Hancurkan chart sebelum navigasi
+            destroyExistingCharts();
+            
             const period = this.dataset.period;
             const url = new URL(window.location);
             url.searchParams.set('period', period);
@@ -522,6 +580,11 @@ document.addEventListener('DOMContentLoaded', function() {
         if (btn.dataset.period === currentPeriod) {
             btn.classList.add('active');
         }
+    });
+    
+    // Cleanup saat halaman akan ditinggalkan
+    window.addEventListener('beforeunload', function() {
+        destroyExistingCharts();
     });
 });
 </script>
