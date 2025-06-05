@@ -470,7 +470,114 @@ class KehadiranController extends Controller
         }
     }
     
-    // REMOVED: personalReport() and komselReport() methods - moved to LaporanController
+    public function personalReport()
+    {
+        $user = Auth::user();
+        
+        if (!$user->id_anggota) {
+            return redirect()->route('dashboard')
+                ->with('error', 'Profil anggota tidak ditemukan.');
+        }
+        
+        $anggota = Anggota::findOrFail($user->id_anggota);
+        
+        // Get attendance data for the last 6 months
+        $startDate = Carbon::now()->subMonths(6);
+        $endDate = Carbon::now();
+        
+        $kehadiran = Kehadiran::where('id_anggota', $anggota->id_anggota)
+            ->whereBetween('waktu_absensi', [$startDate, $endDate])
+            ->with(['pelaksanaan.kegiatan'])
+            ->orderBy('waktu_absensi', 'desc')
+            ->get();
+        
+        // Calculate statistics
+        $totalKehadiran = $kehadiran->count();
+        $kehadiranPerBulan = $kehadiran->groupBy(function($item) {
+            return Carbon::parse($item->waktu_absensi)->format('Y-m');
+        })->map->count();
+        
+        $kehadiranPerKegiatan = $kehadiran->groupBy(function($item) {
+            return $item->pelaksanaan->kegiatan->nama_kegiatan ?? 'Tidak Diketahui';
+        })->map->count()->sortDesc();
+        
+        return view('kehadiran.personal-report', compact(
+            'anggota',
+            'kehadiran', 
+            'totalKehadiran',
+            'kehadiranPerBulan',
+            'kehadiranPerKegiatan',
+            'startDate',
+            'endDate'
+        ));
+    }
+    
+    public function komselReport()
+    {
+        $user = Auth::user();
+        
+        if (!$user->id_anggota) {
+            return redirect()->route('dashboard')
+                ->with('error', 'Profil anggota tidak ditemukan.');
+        }
+        
+        $anggota = Anggota::findOrFail($user->id_anggota);
+        
+        // Check if user is a komsel leader
+        $komselLead = Komsel::where('id_pemimpin', $anggota->id_anggota)->get();
+        
+        if ($komselLead->isEmpty()) {
+            return redirect()->route('dashboard')
+                ->with('error', 'Anda bukan pemimpin komsel.');
+        }
+        
+        $selectedKomsel = request('komsel_id') ? Komsel::findOrFail(request('komsel_id')) : $komselLead->first();
+        $startDate = request('start_date') ? Carbon::parse(request('start_date')) : Carbon::now()->subMonths(3);
+        $endDate = request('end_date') ? Carbon::parse(request('end_date')) : Carbon::now();
+        
+        // Get komsel activities
+        $komselActivityName = 'Komsel - ' . $selectedKomsel->nama_komsel;
+        $pelaksanaanKomsel = PelaksanaanKegiatan::whereHas('kegiatan', function($query) use ($komselActivityName) {
+            $query->where('nama_kegiatan', $komselActivityName);
+        })
+        ->whereBetween('tanggal_kegiatan', [$startDate, $endDate])
+        ->orderBy('tanggal_kegiatan', 'desc')
+        ->get();
+        
+        // Get attendance data
+        $kehadiran = Kehadiran::whereIn('id_pelaksanaan', $pelaksanaanKomsel->pluck('id_pelaksanaan'))
+            ->with(['anggota', 'pelaksanaan'])
+            ->get();
+        
+        // Get komsel members
+        $anggotaKomsel = $selectedKomsel->anggota;
+        
+        // Calculate attendance statistics
+        $attendanceStats = [];
+        foreach ($anggotaKomsel as $member) {
+            $memberAttendance = $kehadiran->where('id_anggota', $member->id_anggota);
+            $attendanceStats[$member->id_anggota] = [
+                'anggota' => $member,
+                'total_kehadiran' => $memberAttendance->count(),
+                'total_kegiatan' => $pelaksanaanKomsel->count(),
+                'persentase' => $pelaksanaanKomsel->count() > 0 
+                    ? round(($memberAttendance->count() / $pelaksanaanKomsel->count()) * 100, 1)
+                    : 0
+            ];
+        }
+        
+        return view('kehadiran.komsel-report', compact(
+            'komselLead',
+            'selectedKomsel',
+            'pelaksanaanKomsel',
+            'kehadiran',
+            'attendanceStats',
+            'startDate',
+            'endDate'
+        ));
+    }
+
+    // ... (rest of the existing methods remain the same)
     
     public function laporan()
     {
