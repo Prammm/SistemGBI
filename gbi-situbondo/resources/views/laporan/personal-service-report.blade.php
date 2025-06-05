@@ -398,12 +398,18 @@ document.addEventListener('DOMContentLoaded', function() {
         const startDate = new Date('{{ $startDate->format('Y-m-d') }}');
         const endDate = new Date('{{ $endDate->format('Y-m-d') }}');
         
-        for (let d = new Date(startDate); d <= endDate; d.setMonth(d.getMonth() + 1)) {
-            const monthKey = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
-            const monthLabel = d.toLocaleDateString('id-ID', { month: 'short', year: 'numeric' });
+        let currentDate = new Date(startDate);
+        currentDate.setDate(1); // Set to first day of month
+        
+        while (currentDate <= endDate) {
+            const monthKey = currentDate.getFullYear() + '-' + String(currentDate.getMonth() + 1).padStart(2, '0');
+            const monthLabel = currentDate.toLocaleDateString('id-ID', { month: 'short', year: 'numeric' });
             
             monthlyLabels.push(monthLabel);
             monthlyValues.push(monthlyData[monthKey] || 0);
+            
+            // Move to next month
+            currentDate.setMonth(currentDate.getMonth() + 1);
         }
         
         new Chart(monthlyCtx, {

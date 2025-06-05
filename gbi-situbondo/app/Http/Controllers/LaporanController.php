@@ -43,62 +43,113 @@ class LaporanController extends Controller
     {
         $reports = [];
         
-        // Admin and Pengurus Gereja can access all reports
+        // Admin and Pengurus Gereja can access all reports + personal reports
         if ($user->id_role <= 2) {
-            $reports = [
-                'kehadiran' => [
-                    'title' => 'Laporan Kehadiran',
-                    'description' => 'Melihat statistik kehadiran jemaat pada kegiatan gereja dalam periode tertentu.',
-                    'route' => 'laporan.kehadiran',
-                    'icon' => 'fa-clipboard-check',
-                    'color' => 'kehadiran'
-                ],
-                'pelayanan' => [
-                    'title' => 'Laporan Pelayanan',
-                    'description' => 'Melihat statistik pelayanan dan aktivitas pelayan dalam periode tertentu.',
-                    'route' => 'laporan.pelayanan',
-                    'icon' => 'fa-hands-helping',
-                    'color' => 'pelayanan'
-                ],
-                'komsel' => [
-                    'title' => 'Laporan Komsel',
-                    'description' => 'Melihat statistik kelompok sel, anggota, dan kegiatan komsel dalam periode tertentu.',
-                    'route' => 'laporan.komsel',
-                    'icon' => 'fa-users',
-                    'color' => 'komsel'
-                ],
-                'anggota' => [
-                    'title' => 'Laporan Anggota',
-                    'description' => 'Melihat statistik anggota jemaat, demografi, dan pertumbuhan jemaat.',
-                    'route' => 'laporan.anggota',
-                    'icon' => 'fa-user-friends',
-                    'color' => 'anggota'
-                ],
-                'dashboard' => [
-                    'title' => 'Dashboard Analitik',
-                    'description' => 'Melihat ringkasan statistik dan analitik untuk semua aspek kegiatan gereja.',
-                    'route' => 'laporan.dashboard',
-                    'icon' => 'fa-chart-line',
-                    'color' => 'dashboard'
-                ]
-            ];
-        }
-        // Petugas Pelayanan
-        elseif ($user->id_role == 3) {
-            $reports['kehadiran-personal'] = [
-                'title' => 'Kehadiran Pribadi',
-                'description' => 'Melihat riwayat kehadiran Anda pada ibadah, komsel, dan pelayanan.',
-                'route' => 'laporan.personal-report',
-                'icon' => 'fa-user-check',
+            // System-wide reports
+            $reports['kehadiran'] = [
+                'title' => 'Laporan Kehadiran',
+                'description' => 'Melihat statistik kehadiran jemaat pada kegiatan gereja dalam periode tertentu.',
+                'route' => 'laporan.kehadiran',
+                'icon' => 'fa-clipboard-check',
                 'color' => 'kehadiran'
             ];
             
             $reports['pelayanan'] = [
                 'title' => 'Laporan Pelayanan',
-                'description' => 'Melihat statistik pelayanan dan aktivitas pelayan yang Anda kelola.',
+                'description' => 'Melihat statistik pelayanan dan aktivitas pelayan dalam periode tertentu.',
                 'route' => 'laporan.pelayanan',
                 'icon' => 'fa-hands-helping',
                 'color' => 'pelayanan'
+            ];
+            
+            $reports['komsel'] = [
+                'title' => 'Laporan Komsel',
+                'description' => 'Melihat statistik kelompok sel, anggota, dan kegiatan komsel dalam periode tertentu.',
+                'route' => 'laporan.komsel',
+                'icon' => 'fa-users',
+                'color' => 'komsel'
+            ];
+            
+            $reports['anggota'] = [
+                'title' => 'Laporan Anggota',
+                'description' => 'Melihat statistik anggota jemaat, demografi, dan pertumbuhan jemaat.',
+                'route' => 'laporan.anggota',
+                'icon' => 'fa-user-friends',
+                'color' => 'anggota'
+            ];
+            
+            $reports['dashboard'] = [
+                'title' => 'Dashboard Analitik',
+                'description' => 'Melihat ringkasan statistik dan analitik untuk semua aspek kegiatan gereja.',
+                'route' => 'laporan.dashboard',
+                'icon' => 'fa-chart-line',
+                'color' => 'dashboard'
+            ];
+            
+            // Personal reports with user selection capability
+            $reports['kehadiran-personal'] = [
+                'title' => 'Kehadiran Pribadi',
+                'description' => 'Melihat riwayat kehadiran pribadi (dapat memilih anggota lain).',
+                'route' => 'laporan.personal-report',
+                'icon' => 'fa-user-check',
+                'color' => 'kehadiran',
+                'can_select_user' => true
+            ];
+            
+            $reports['pelayanan-personal'] = [
+                'title' => 'Riwayat Pelayanan Pribadi',
+                'description' => 'Melihat riwayat pelayanan pribadi (dapat memilih anggota lain).',
+                'route' => 'laporan.personal-service-report',
+                'icon' => 'fa-hand-holding-heart',
+                'color' => 'pelayanan',
+                'can_select_user' => true
+            ];
+            
+            $reports['komsel-leader'] = [
+                'title' => 'Laporan Komsel (Pemimpin)',
+                'description' => 'Melihat laporan komsel sebagai pemimpin (dapat memilih komsel).',
+                'route' => 'laporan.komsel-report',
+                'icon' => 'fa-users-cog',
+                'color' => 'komsel',
+                'can_select_user' => true
+            ];
+        }
+        // Petugas Pelayanan
+        elseif ($user->id_role == 3) {
+            // General reports they can access
+            $reports['kehadiran'] = [
+                'title' => 'Laporan Kehadiran',
+                'description' => 'Melihat statistik kehadiran jemaat pada kegiatan gereja dalam periode tertentu.',
+                'route' => 'laporan.kehadiran',
+                'icon' => 'fa-clipboard-check',
+                'color' => 'kehadiran'
+            ];
+            
+            $reports['pelayanan'] = [
+                'title' => 'Laporan Pelayanan',
+                'description' => 'Melihat statistik pelayanan dan aktivitas pelayan.',
+                'route' => 'laporan.pelayanan',
+                'icon' => 'fa-hands-helping',
+                'color' => 'pelayanan'
+            ];
+            
+            // Personal reports for themselves
+            $reports['kehadiran-personal'] = [
+                'title' => 'Kehadiran Pribadi',
+                'description' => 'Melihat riwayat kehadiran pribadi Anda.',
+                'route' => 'laporan.personal-report',
+                'icon' => 'fa-user-check',
+                'color' => 'kehadiran'
+            ];
+            
+            // Service reports with user selection
+            $reports['pelayanan-personal'] = [
+                'title' => 'Riwayat Pelayanan',
+                'description' => 'Melihat riwayat pelayanan (dapat memilih anggota lain).',
+                'route' => 'laporan.personal-service-report',
+                'icon' => 'fa-hand-holding-heart',
+                'color' => 'pelayanan',
+                'can_select_user' => true
             ];
             
             // Check if user is a komsel leader
@@ -107,7 +158,7 @@ class LaporanController extends Controller
                 $isKomselLeader = Komsel::where('id_pemimpin', $anggota->id_anggota)->exists();
                 
                 if ($isKomselLeader) {
-                    $reports['komsel'] = [
+                    $reports['komsel-leader'] = [
                         'title' => 'Laporan Komsel',
                         'description' => 'Melihat statistik kehadiran dan aktivitas komsel yang Anda pimpin.',
                         'route' => 'laporan.komsel-report',
@@ -133,7 +184,7 @@ class LaporanController extends Controller
                 // Check if user is a komsel leader
                 $isKomselLeader = Komsel::where('id_pemimpin', $anggota->id_anggota)->exists();
                 if ($isKomselLeader) {
-                    $reports['komsel'] = [
+                    $reports['komsel-leader'] = [
                         'title' => 'Laporan Komsel',
                         'description' => 'Melihat statistik kehadiran dan aktivitas komsel yang Anda pimpin.',
                         'route' => 'laporan.komsel-report',
@@ -495,12 +546,28 @@ class LaporanController extends Controller
     {
         $user = Auth::user();
         
-        if (!$user->id_anggota) {
-            return redirect()->route('dashboard')
-                ->with('error', 'Profil anggota tidak ditemukan.');
+        // Check if user can select other users (Admin, Pengurus)
+        $canSelectUser = $user->id_role <= 2;
+        $selectedUserId = null;
+        $anggota = null;
+        
+        if ($canSelectUser && $request->has('user_id') && $request->user_id) {
+            // Admin/Pengurus can view other user's report
+            $selectedUser = \App\Models\User::find($request->user_id);
+            if ($selectedUser && $selectedUser->id_anggota) {
+                $anggota = Anggota::findOrFail($selectedUser->id_anggota);
+                $selectedUserId = $selectedUser->id;
+            }
         }
         
-        $anggota = Anggota::findOrFail($user->id_anggota);
+        // If no specific user selected or user doesn't have permission, use current user
+        if (!$anggota) {
+            if (!$user->id_anggota) {
+                return redirect()->route('laporan.index')
+                    ->with('error', 'Profil anggota tidak ditemukan.');
+            }
+            $anggota = Anggota::findOrFail($user->id_anggota);
+        }
         
         // Get period from request or default to 6 months
         $period = $request->input('period', 6);
@@ -523,6 +590,9 @@ class LaporanController extends Controller
             return $item->pelaksanaan->kegiatan->nama_kegiatan ?? 'Tidak Diketahui';
         })->map->count()->sortDesc();
         
+        // Get all users for selection (if user has permission)
+        $allUsers = $canSelectUser ? \App\Models\User::whereNotNull('id_anggota')->with('anggota')->get() : collect();
+        
         return view('laporan.personal-report', compact(
             'anggota',
             'kehadiran', 
@@ -531,7 +601,10 @@ class LaporanController extends Controller
             'kehadiranPerKegiatan',
             'startDate',
             'endDate',
-            'period'
+            'period',
+            'canSelectUser',
+            'allUsers',
+            'selectedUserId'
         ));
     }
 
@@ -542,19 +615,38 @@ class LaporanController extends Controller
     {
         $user = Auth::user();
         
-        if (!$user->id_anggota) {
-            return redirect()->route('dashboard')
-                ->with('error', 'Profil anggota tidak ditemukan.');
+        // Check if user can select other users (Admin, Pengurus)
+        $canSelectUser = $user->id_role <= 2;
+        $selectedUserId = null;
+        $anggota = null;
+        
+        if ($canSelectUser && $request->has('user_id') && $request->user_id) {
+            // Admin/Pengurus can view other user's komsel report
+            $selectedUser = \App\Models\User::find($request->user_id);
+            if ($selectedUser && $selectedUser->id_anggota) {
+                $anggota = Anggota::findOrFail($selectedUser->id_anggota);
+                $selectedUserId = $selectedUser->id;
+            }
         }
         
-        $anggota = Anggota::findOrFail($user->id_anggota);
+        // If no specific user selected, use current user
+        if (!$anggota) {
+            if (!$user->id_anggota) {
+                return redirect()->route('laporan.index')
+                    ->with('error', 'Profil anggota tidak ditemukan.');
+            }
+            $anggota = Anggota::findOrFail($user->id_anggota);
+        }
         
-        // Check if user is a komsel leader
+        // Check if selected anggota is a komsel leader
         $komselLead = Komsel::where('id_pemimpin', $anggota->id_anggota)->get();
         
         if ($komselLead->isEmpty()) {
+            $message = $canSelectUser && $selectedUserId ? 
+                'Anggota yang dipilih bukan pemimpin komsel.' : 
+                'Anda bukan pemimpin komsel.';
             return redirect()->route('laporan.index')
-                ->with('error', 'Anda bukan pemimpin komsel.');
+                ->with('error', $message);
         }
         
         $selectedKomsel = $request->input('komsel_id') ? Komsel::findOrFail($request->input('komsel_id')) : $komselLead->first();
@@ -592,6 +684,12 @@ class LaporanController extends Controller
             ];
         }
         
+        // Get komsel leaders for selection (if user has permission)
+        $komselLeaders = $canSelectUser ? 
+            \App\Models\User::whereHas('anggota', function($query) {
+                $query->whereIn('id_anggota', Komsel::pluck('id_pemimpin'));
+            })->with('anggota')->get() : collect();
+        
         return view('laporan.komsel-report', compact(
             'komselLead',
             'selectedKomsel',
@@ -599,7 +697,11 @@ class LaporanController extends Controller
             'kehadiran',
             'attendanceStats',
             'startDate',
-            'endDate'
+            'endDate',
+            'canSelectUser',
+            'komselLeaders',
+            'selectedUserId',
+            'anggota'
         ));
     }
 
@@ -610,12 +712,28 @@ class LaporanController extends Controller
     {
         $user = Auth::user();
         
-        if (!$user->id_anggota) {
-            return redirect()->route('dashboard')
-                ->with('error', 'Profil anggota tidak ditemukan.');
+        // Check if user can select other users (Admin, Pengurus, Petugas Pelayanan)
+        $canSelectUser = $user->id_role <= 3;
+        $selectedUserId = null;
+        $anggota = null;
+        
+        if ($canSelectUser && $request->has('user_id') && $request->user_id) {
+            // Admin/Pengurus/Petugas can view other user's service report
+            $selectedUser = \App\Models\User::find($request->user_id);
+            if ($selectedUser && $selectedUser->id_anggota) {
+                $anggota = Anggota::findOrFail($selectedUser->id_anggota);
+                $selectedUserId = $selectedUser->id;
+            }
         }
         
-        $anggota = Anggota::findOrFail($user->id_anggota);
+        // If no specific user selected, use current user
+        if (!$anggota) {
+            if (!$user->id_anggota) {
+                return redirect()->route('laporan.index')
+                    ->with('error', 'Profil anggota tidak ditemukan.');
+            }
+            $anggota = Anggota::findOrFail($user->id_anggota);
+        }
         
         // Get period from request or default to 6 months
         $period = $request->input('period', 6);
@@ -639,6 +757,10 @@ class LaporanController extends Controller
             return $item->kegiatan->nama_kegiatan ?? 'Tidak Diketahui';
         })->map->count()->sortDesc();
         
+        // Get users with service history for selection (if user has permission)
+        $usersWithService = $canSelectUser ? 
+            \App\Models\User::whereHas('anggota.jadwalPelayanan')->with('anggota')->get() : collect();
+        
         return view('laporan.personal-service-report', compact(
             'anggota',
             'jadwalPelayanan',
@@ -648,7 +770,10 @@ class LaporanController extends Controller
             'pelayananPerKegiatan',
             'startDate',
             'endDate',
-            'period'
+            'period',
+            'canSelectUser',
+            'usersWithService',
+            'selectedUserId'
         ));
     }
 
