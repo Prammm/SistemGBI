@@ -227,8 +227,8 @@
     <h1 class="mt-4">Laporan Kehadiran Pribadi</h1>
     <ol class="breadcrumb mb-4">
         <li class="breadcrumb-item"><a href="{{ route('dashboard') }}">Dashboard</a></li>
-        <li class="breadcrumb-item"><a href="{{ route('kehadiran.index') }}">Presensi Kehadiran</a></li>
-        <li class="breadcrumb-item active">Laporan Pribadi</li>
+        <li class="breadcrumb-item"><a href="{{ route('laporan.index') }}">Laporan</a></li>
+        <li class="breadcrumb-item active">Kehadiran Pribadi</li>
     </ol>
     
     <div class="report-header">
@@ -348,7 +348,7 @@
             <div class="no-data-message">
                 <i class="fas fa-calendar-times"></i>
                 <h5>Belum Ada Data Kehadiran</h5>
-                <p>Anda belum memiliki catatan kehadiran dalam 6 bulan terakhir.</p>
+                <p>Anda belum memiliki catatan kehadiran dalam {{ $startDate->diffInMonths($endDate) }} bulan terakhir.</p>
                 <a href="{{ route('kehadiran.index') }}" class="btn btn-primary">
                     <i class="fas fa-qrcode me-2"></i>Mulai Presensi
                 </a>
@@ -357,7 +357,7 @@
     @endif
     
     <div class="text-center mt-4">
-        <a href="{{ route('kehadiran.index') }}" class="btn btn-secondary">
+        <a href="{{ route('laporan.index') }}" class="btn btn-secondary">
             <i class="fas fa-arrow-left me-2"></i>Kembali
         </a>
         <button onclick="window.print()" class="btn btn-outline-primary ms-2">

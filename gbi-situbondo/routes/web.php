@@ -184,7 +184,7 @@ Route::middleware(['auth'])->group(function () {
         })->name('api.preview-generate');
     });
 
-    // NEW: Enhanced Kehadiran Routes
+    // UPDATED: Kehadiran Routes - removed personalReport and komselReport
     Route::prefix('kehadiran')->name('kehadiran.')->group(function () {
         // Existing routes
         Route::get('scan/{id?}', [KehadiranController::class, 'scan'])->name('scan');
@@ -192,18 +192,9 @@ Route::middleware(['auth'])->group(function () {
         Route::get('laporan', [KehadiranController::class, 'laporan'])->name('laporan');
         Route::post('laporan/generate', [KehadiranController::class, 'generateLaporan'])->name('laporan.generate');
         
-        // NEW: Enhanced QR and Family Attendance Routes
+        // QR and Family Attendance Routes
         Route::get('family-attendance/{id_pelaksanaan}', [KehadiranController::class, 'familyAttendance'])->name('family-attendance');
         Route::post('store-family-attendance', [KehadiranController::class, 'storeFamilyAttendance'])->name('store-family-attendance');
-        
-        // NEW: Personal Reports with middleware protection
-        Route::get('personal-report', [KehadiranController::class, 'personalReport'])
-            ->name('personal-report')
-            ->middleware('attendance.access');
-        
-        Route::get('komsel-report', [KehadiranController::class, 'komselReport'])
-            ->name('komsel-report')
-            ->middleware('attendance.access');
     });
 
     // API Routes for QR Scanner
@@ -292,14 +283,39 @@ Route::middleware(['auth'])->group(function () {
         ->name('anggota.index')
         ->middleware(['auth', 'permission:view_anggota']);
 
-    // Laporan routes
+    // UPDATED: Role-based Laporan routes with new methods
     Route::prefix('laporan')->name('laporan.')->group(function () {
         Route::get('/', [LaporanController::class, 'index'])->name('index');
-        Route::get('/kehadiran', [LaporanController::class, 'kehadiran'])->name('kehadiran');
-        Route::get('/pelayanan', [LaporanController::class, 'pelayanan'])->name('pelayanan');
-        Route::get('/komsel', [LaporanController::class, 'komsel'])->name('komsel');
-        Route::get('/anggota', [LaporanController::class, 'anggota'])->name('anggota');
-        Route::get('/dashboard', [LaporanController::class, 'dashboard'])->name('dashboard');
+        
+        // General reports (Admin/Pengurus only)
+        Route::get('/kehadiran', [LaporanController::class, 'kehadiran'])
+            ->name('kehadiran')
+            ->middleware('permission:view_laporan');
+        Route::get('/pelayanan', [LaporanController::class, 'pelayanan'])
+            ->name('pelayanan')
+            ->middleware('permission:view_laporan');
+        Route::get('/komsel', [LaporanController::class, 'komsel'])
+            ->name('komsel')
+            ->middleware('permission:view_laporan');
+        Route::get('/anggota', [LaporanController::class, 'anggota'])
+            ->name('anggota')
+            ->middleware('permission:view_laporan');
+        Route::get('/dashboard', [LaporanController::class, 'dashboard'])
+            ->name('dashboard')
+            ->middleware('permission:view_laporan');
+        
+        // NEW: Personal reports (moved from KehadiranController)
+        Route::get('/personal-report', [LaporanController::class, 'personalReport'])
+            ->name('personal-report')
+            ->middleware('attendance.access');
+        Route::get('/komsel-report', [LaporanController::class, 'komselReport'])
+            ->name('komsel-report')
+            ->middleware('attendance.access');
+        Route::get('/personal-service-report', [LaporanController::class, 'personalServiceReport'])
+            ->name('personal-service-report')
+            ->middleware('attendance.access');
+        
+        // Export routes
         Route::get('/export/{jenis}/{format?}', [LaporanController::class, 'export'])->name('export');
     });
 
