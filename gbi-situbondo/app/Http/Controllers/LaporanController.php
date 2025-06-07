@@ -602,17 +602,23 @@ class LaporanController extends Controller
     {
         $user = Auth::user();
         
-        // Check if user can select other users (Admin, Pengurus)
-        $canSelectUser = $user->id_role <= 2;
+        // Check if user can select other users (Admin, Pengurus, Petugas Pelayanan)
+        $canSelectUser = $user->id_role <= 3;
         $selectedUserId = null;
         $anggota = null;
+        $selectedKomselId = null;
         
         if ($canSelectUser && $request->has('user_id') && $request->user_id) {
-            // Admin/Pengurus can view other user's komsel report
+            // Admin/Pengurus/Petugas dapat melihat laporan komsel user lain
             $selectedUser = \App\Models\User::find($request->user_id);
             if ($selectedUser && $selectedUser->id_anggota) {
                 $anggota = Anggota::findOrFail($selectedUser->id_anggota);
                 $selectedUserId = $selectedUser->id;
+                
+                // Jika ada komsel_id yang spesifik dari admin selection
+                if ($request->has('komsel_id') && $request->komsel_id) {
+                    $selectedKomselId = $request->komsel_id;
+                }
             }
         }
         
@@ -636,7 +642,24 @@ class LaporanController extends Controller
                 ->with('error', $message);
         }
         
-        $selectedKomsel = $request->input('komsel_id') ? Komsel::findOrFail($request->input('komsel_id')) : $komselLead->first();
+        // Tentukan komsel yang akan ditampilkan
+        if ($selectedKomselId) {
+            // Admin memilih komsel spesifik
+            $selectedKomsel = Komsel::findOrFail($selectedKomselId);
+            
+            // Pastikan komsel ini dipimpin oleh anggota yang dipilih
+            if ($selectedKomsel->id_pemimpin != $anggota->id_anggota) {
+                return redirect()->route('laporan.komsel-report')
+                    ->with('error', 'Komsel yang dipilih tidak dipimpin oleh anggota tersebut.');
+            }
+        } elseif ($request->input('komsel_id')) {
+            // Non-admin memilih dari komsel yang mereka pimpin
+            $selectedKomsel = Komsel::findOrFail($request->input('komsel_id'));
+        } else {
+            // Default ke komsel pertama yang dipimpin
+            $selectedKomsel = $komselLead->first();
+        }
+        
         $startDate = $request->input('start_date') ? Carbon::parse($request->input('start_date')) : Carbon::now()->subMonths(3);
         $endDate = $request->input('end_date') ? Carbon::parse($request->input('end_date')) : Carbon::now();
         

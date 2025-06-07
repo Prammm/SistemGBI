@@ -378,23 +378,48 @@
                     <i class="fas fa-users"></i>
                     <span>Pilih Pemimpin Komsel untuk Melihat Laporan</span>
                 </div>
-                <form method="GET" action="{{ route('laporan.komsel-report') }}" class="user-selector-form">
+                <form method="GET" action="{{ route('laporan.komsel-report') }}" class="user-selector-form" id="komselForm">
                     <div class="form-group">
                         <label for="user_id">Pilih Pemimpin Komsel:</label>
                         <select id="user_id" name="user_id" class="form-select">
                             <option value="">-- Pilih Pemimpin Komsel --</option>
-                            @foreach($komselLeaders as $user)
-                                <option value="{{ $user->id }}" {{ $selectedUserId == $user->id ? 'selected' : '' }}>
-                                    {{ $user->anggota->nama ?? $user->name }}
-                                    @php
-                                        $userKomsel = \App\Models\Komsel::where('id_pemimpin', $user->anggota->id_anggota)->first();
-                                    @endphp
-                                    @if($userKomsel)
-                                        ({{ $userKomsel->nama_komsel }})
-                                    @endif
+                            @php
+                                $komselOptions = [];
+                                foreach($komselLeaders as $user) {
+                                    $userKomsels = \App\Models\Komsel::where('id_pemimpin', $user->anggota->id_anggota)->get();
+                                    foreach($userKomsels as $komsel) {
+                                        $komselOptions[] = [
+                                            'user_id' => $user->id,
+                                            'komsel_id' => $komsel->id_komsel,
+                                            'user_name' => $user->anggota->nama ?? $user->name,
+                                            'komsel_name' => $komsel->nama_komsel
+                                        ];
+                                    }
+                                }
+                            @endphp
+                            @foreach($komselOptions as $option)
+                                @php
+                                    $isSelected = false;
+                                    // Jika admin memilih user dan komsel spesifik
+                                    if ($selectedUserId == $option['user_id'] && request('komsel_id') == $option['komsel_id']) {
+                                        $isSelected = true;
+                                    } 
+                                    // Jika user dipilih tapi tidak ada komsel spesifik, pilih komsel pertama user tersebut
+                                    elseif ($selectedUserId == $option['user_id'] && !request('komsel_id')) {
+                                        $userFirstKomsel = \App\Models\Komsel::where('id_pemimpin', \App\Models\User::find($option['user_id'])->anggota->id_anggota)->first();
+                                        if ($userFirstKomsel && $userFirstKomsel->id_komsel == $option['komsel_id']) {
+                                            $isSelected = true;
+                                        }
+                                    }
+                                @endphp
+                                <option value="{{ $option['user_id'] }}" 
+                                        data-komsel-id="{{ $option['komsel_id'] }}"
+                                        {{ $isSelected ? 'selected' : '' }}>
+                                    {{ $option['komsel_name'] }} - {{ $option['user_name'] }}
                                 </option>
                             @endforeach
                         </select>
+                        <input type="hidden" id="komsel_id" name="komsel_id" value="">
                     </div>
                     <div class="form-group">
                         <label for="start_date">Tanggal Mulai:</label>
@@ -642,6 +667,32 @@ document.addEventListener('DOMContentLoaded', function() {
         if (memberDistributionChart) {
             memberDistributionChart.destroy();
             memberDistributionChart = null;
+        }
+    }
+    
+    // Handle komsel selection untuk admin
+    const userSelect = document.getElementById('user_id');
+    const komselIdInput = document.getElementById('komsel_id');
+    
+    if (userSelect && komselIdInput) {
+        userSelect.addEventListener('change', function() {
+            const selectedOption = this.options[this.selectedIndex];
+            const komselId = selectedOption.getAttribute('data-komsel-id');
+            komselIdInput.value = komselId || '';
+        });
+        
+        // Set initial value jika ada yang terpilih
+        const selectedOption = userSelect.options[userSelect.selectedIndex];
+        if (selectedOption) {
+            const komselId = selectedOption.getAttribute('data-komsel-id');
+            komselIdInput.value = komselId || '';
+        }
+        
+        // Set nilai dari URL parameter jika ada
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlKomselId = urlParams.get('komsel_id');
+        if (urlKomselId) {
+            komselIdInput.value = urlKomselId;
         }
     }
     
