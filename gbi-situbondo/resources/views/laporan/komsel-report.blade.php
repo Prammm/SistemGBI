@@ -388,7 +388,7 @@
                         } elseif ($percentage >= 75) {
                             $statusClass = 'status-good';
                             $statusText = 'Baik';
-                        } elseif ($percentage >= 75) {
+                        } elseif ($percentage >= 50) {
                             $statusClass = 'status-fair';
                             $statusText = 'Cukup';
                         } else {
