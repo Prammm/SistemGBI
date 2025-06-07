@@ -2,28 +2,60 @@
 
 @section('content')
 <div class="container-fluid">
-    <h1 class="mt-4">Dashboard</h1>
-    <ol class="breadcrumb mb-4">
-        <li class="breadcrumb-item active">Dashboard</li>
-    </ol>
-    
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="mt-4">Dashboard</h1>
+            <p class="text-muted mb-0">{{ $data['role_name'] ?? 'Dashboard' }} - {{ now()->format('l, d F Y') }}</p>
+        </div>
+        @if($user->id_role <= 3)
+        <div class="dropdown">
+            <button class="btn btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                <i class="fas fa-plus"></i> Quick Actions
+            </button>
+            <ul class="dropdown-menu">
+                @if($user->id_role <= 2)
+                <li><a class="dropdown-item" href="{{ route('anggota.create') }}"><i class="fas fa-user-plus me-2"></i>Tambah Anggota</a></li>
+                <li><a class="dropdown-item" href="{{ route('kegiatan.create') }}"><i class="fas fa-calendar-plus me-2"></i>Buat Kegiatan</a></li>
+                @endif
+                @if($user->id_role <= 3)
+                <li><a class="dropdown-item" href="{{ route('kehadiran.create') }}"><i class="fas fa-clipboard-check me-2"></i>Input Presensi</a></li>
+                <li><a class="dropdown-item" href="{{ route('pelayanan.create') }}"><i class="fas fa-hand-holding-heart me-2"></i>Jadwal Pelayanan</a></li>
+                @endif
+            </ul>
+        </div>
+        @endif
+    </div>
+
     @if(session('success'))
-        <div class="alert alert-success">
-            {{ session('success') }}
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <i class="fas fa-check-circle me-2"></i>{{ session('success') }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
     @endif
-    
-    <div class="row">
+
+    @if(session('info'))
+        <div class="alert alert-info alert-dismissible fade show" role="alert">
+            <i class="fas fa-info-circle me-2"></i>{{ session('info') }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    @endif
+
+    {{-- ADMIN DASHBOARD --}}
+    @if($user->id_role == 1)
+    <div class="row mb-4">
         <div class="col-xl-3 col-md-6">
             <div class="card bg-primary text-white mb-4">
                 <div class="card-body">
-                    <div class="d-flex justify-content-between">
-                        <div>Total Anggota</div>
-                        <div>{{ $data['total_anggota'] }}</div>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="small">Total Users</div>
+                            <div class="fs-4 fw-bold">{{ $data['total_users'] }}</div>
+                        </div>
+                        <div class="fs-1 opacity-50"><i class="fas fa-users"></i></div>
                     </div>
                 </div>
                 <div class="card-footer d-flex align-items-center justify-content-between">
-                    <a class="small text-white stretched-link" href="{{ route('anggota.index') }}">Lihat Detail</a>
+                    <a class="small text-white stretched-link" href="{{ route('users.index') }}">Kelola Users</a>
                     <div class="small text-white"><i class="fas fa-angle-right"></i></div>
                 </div>
             </div>
@@ -31,210 +63,742 @@
         <div class="col-xl-3 col-md-6">
             <div class="card bg-success text-white mb-4">
                 <div class="card-body">
-                    <div class="d-flex justify-content-between">
-                        <div>Total Komsel</div>
-                        <div>{{ $data['total_komsel'] }}</div>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="small">Total Anggota</div>
+                            <div class="fs-4 fw-bold">{{ $data['total_anggota'] }}</div>
+                            <div class="small">+{{ $data['new_anggota_this_month'] }} bulan ini</div>
+                        </div>
+                        <div class="fs-1 opacity-50"><i class="fas fa-user-friends"></i></div>
                     </div>
                 </div>
                 <div class="card-footer d-flex align-items-center justify-content-between">
-                    <a class="small text-white stretched-link" href="{{ route('komsel.index') }}">Lihat Detail</a>
+                    <a class="small text-white stretched-link" href="{{ route('anggota.index') }}">Kelola Anggota</a>
+                    <div class="small text-white"><i class="fas fa-angle-right"></i></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-warning text-white mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="small">Keluarga & Komsel</div>
+                            <div class="fs-4 fw-bold">{{ $data['total_keluarga'] }} / {{ $data['total_komsel'] }}</div>
+                        </div>
+                        <div class="fs-1 opacity-50"><i class="fas fa-home"></i></div>
+                    </div>
+                </div>
+                <div class="card-footer d-flex align-items-center justify-content-between">
+                    <a class="small text-white stretched-link" href="{{ route('keluarga.index') }}">Lihat Detail</a>
+                    <div class="small text-white"><i class="fas fa-angle-right"></i></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-info text-white mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="small">Aktif Minggu Ini</div>
+                            <div class="fs-4 fw-bold">{{ $data['active_this_week'] }}</div>
+                        </div>
+                        <div class="fs-1 opacity-50"><i class="fas fa-chart-line"></i></div>
+                    </div>
+                </div>
+                <div class="card-footer d-flex align-items-center justify-content-between">
+                    <a class="small text-white stretched-link" href="{{ route('laporan.dashboard') }}">Lihat Analitik</a>
                     <div class="small text-white"><i class="fas fa-angle-right"></i></div>
                 </div>
             </div>
         </div>
     </div>
-    
+
+    @if($data['users_without_anggota'] > 0 || $data['anggota_without_komsel'] > 0)
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="alert alert-warning">
+                <h6><i class="fas fa-exclamation-triangle me-2"></i>Perhatian Sistem</h6>
+                @if($data['users_without_anggota'] > 0)
+                <div>• {{ $data['users_without_anggota'] }} user belum terhubung dengan data anggota</div>
+                @endif
+                @if($data['anggota_without_komsel'] > 0)
+                <div>• {{ $data['anggota_without_komsel'] }} anggota belum bergabung komsel</div>
+                @endif
+            </div>
+        </div>
+    </div>
+    @endif
+
     <div class="row">
         <div class="col-xl-6">
             <div class="card mb-4">
                 <div class="card-header">
-                    <i class="fas fa-calendar me-1"></i>
-                    Kegiatan Mendatang
+                    <i class="fas fa-users me-1"></i>User Terbaru
                 </div>
                 <div class="card-body">
-                    @if(count($data['kegiatan_mendatang']) > 0)
-                        <div class="table-responsive">
-                            <table class="table table-bordered">
-                                <thead>
-                                    <tr>
-                                        <th>Kegiatan</th>
-                                        <th>Tanggal</th>
-                                        <th>Waktu</th>
-                                        <th>Lokasi</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach($data['kegiatan_mendatang'] as $kegiatan)
-                                        <tr>
-                                            <td>{{ $kegiatan->kegiatan->nama_kegiatan }}</td>
-                                            <td>{{ \Carbon\Carbon::parse($kegiatan->tanggal_kegiatan)->format('d M Y') }}</td>
-                                            <td>{{ \Carbon\Carbon::parse($kegiatan->jam_mulai)->format('H:i') }} - 
-                                                {{ \Carbon\Carbon::parse($kegiatan->jam_selesai)->format('H:i') }}</td>
-                                            <td>{{ $kegiatan->lokasi }}</td>
-                                        </tr>
-                                    @endforeach
-                                </tbody>
-                            </table>
-                        </div>
+                    @if($data['recent_users']->count() > 0)
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Nama</th>
+                                    <th>Role</th>
+                                    <th>Anggota</th>
+                                    <th>Tanggal</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach($data['recent_users'] as $user)
+                                <tr>
+                                    <td>{{ $user->name }}</td>
+                                    <td><span class="badge bg-secondary">{{ $user->role->nama_role ?? 'N/A' }}</span></td>
+                                    <td>{{ $user->anggota->nama ?? 'Belum terhubung' }}</td>
+                                    <td class="text-muted small">{{ $user->created_at->format('d/m/Y') }}</td>
+                                </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
                     @else
-                        <p class="text-center">Tidak ada kegiatan mendatang</p>
+                    <p class="text-center text-muted">Belum ada user baru</p>
                     @endif
                 </div>
             </div>
         </div>
-        
-        @if(isset($data['anggota_baru']) && count($data['anggota_baru']) > 0)
         <div class="col-xl-6">
             <div class="card mb-4">
                 <div class="card-header">
-                    <i class="fas fa-users me-1"></i>
-                    Anggota Baru
+                    <i class="fas fa-calendar me-1"></i>Kegiatan Mendatang
                 </div>
                 <div class="card-body">
-                    <div class="table-responsive">
-                        <table class="table table-bordered">
-                            <thead>
-                                <tr>
-                                    <th>Nama</th>
-                                    <th>Tanggal Bergabung</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach($data['anggota_baru'] as $anggota)
-                                    <tr>
-                                        <td>{{ $anggota->nama }}</td>
-                                        <td>{{ \Carbon\Carbon::parse($anggota->created_at)->format('d M Y') }}</td>
-                                    </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
+                    @if($data['upcoming_events']->count() > 0)
+                    <div class="list-group list-group-flush">
+                        @foreach($data['upcoming_events'] as $event)
+                        <div class="list-group-item d-flex justify-content-between align-items-center px-0">
+                            <div>
+                                <div class="fw-bold">{{ $event->kegiatan->nama_kegiatan }}</div>
+                                <small class="text-muted">{{ Carbon\Carbon::parse($event->tanggal_kegiatan)->format('d M Y') }} • {{ Carbon\Carbon::parse($event->jam_mulai)->format('H:i') }}</small>
+                            </div>
+                            <span class="badge bg-primary rounded-pill">{{ $event->kegiatan->tipe_kegiatan }}</span>
+                        </div>
+                        @endforeach
+                    </div>
+                    @else
+                    <p class="text-center text-muted">Tidak ada kegiatan mendatang</p>
+                    @endif
+                </div>
+            </div>
+        </div>
+    </div>
+    @endif
+
+    {{-- PENGURUS GEREJA DASHBOARD --}}
+    @if($user->id_role == 2)
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-primary text-white mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="small">Total Anggota</div>
+                            <div class="fs-4 fw-bold">{{ $data['total_anggota'] }}</div>
+                            <div class="small">+{{ $data['new_anggota_this_month'] }} bulan ini</div>
+                        </div>
+                        <div class="fs-1 opacity-50"><i class="fas fa-users"></i></div>
+                    </div>
+                </div>
+                <div class="card-footer d-flex align-items-center justify-content-between">
+                    <a class="small text-white stretched-link" href="{{ route('anggota.index') }}">Kelola Anggota</a>
+                    <div class="small text-white"><i class="fas fa-angle-right"></i></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-success text-white mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="small">Keluarga</div>
+                            <div class="fs-4 fw-bold">{{ $data['total_keluarga'] }}</div>
+                            <div class="small">+{{ $data['new_families_this_month'] }} bulan ini</div>
+                        </div>
+                        <div class="fs-1 opacity-50"><i class="fas fa-home"></i></div>
+                    </div>
+                </div>
+                <div class="card-footer d-flex align-items-center justify-content-between">
+                    <a class="small text-white stretched-link" href="{{ route('keluarga.index') }}">Kelola Keluarga</a>
+                    <div class="small text-white"><i class="fas fa-angle-right"></i></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-warning text-white mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="small">Komsel</div>
+                            <div class="fs-4 fw-bold">{{ $data['total_komsel'] }}</div>
+                            <div class="small">Rata-rata {{ number_format($data['average_komsel_size'], 1) }} anggota</div>
+                        </div>
+                        <div class="fs-1 opacity-50"><i class="fas fa-users"></i></div>
+                    </div>
+                </div>
+                <div class="card-footer d-flex align-items-center justify-content-between">
+                    <a class="small text-white stretched-link" href="{{ route('komsel.index') }}">Kelola Komsel</a>
+                    <div class="small text-white"><i class="fas fa-angle-right"></i></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-info text-white mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="small">Kehadiran Bulan Ini</div>
+                            <div class="fs-4 fw-bold">{{ $data['active_members_this_month'] }}</div>
+                            <div class="small">{{ $data['attendance_this_week'] }} minggu ini</div>
+                        </div>
+                        <div class="fs-1 opacity-50"><i class="fas fa-chart-line"></i></div>
+                    </div>
+                </div>
+                <div class="card-footer d-flex align-items-center justify-content-between">
+                    <a class="small text-white stretched-link" href="{{ route('laporan.index') }}">Lihat Laporan</a>
+                    <div class="small text-white"><i class="fas fa-angle-right"></i></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-xl-6">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="fas fa-user-plus me-1"></i>Anggota Baru
+                </div>
+                <div class="card-body">
+                    @if($data['recent_anggota']->count() > 0)
+                    <div class="list-group list-group-flush">
+                        @foreach($data['recent_anggota'] as $anggota)
+                        <div class="list-group-item d-flex justify-content-between align-items-center px-0">
+                            <div>
+                                <div class="fw-bold">{{ $anggota->nama }}</div>
+                                <small class="text-muted">{{ $anggota->keluarga->nama_keluarga ?? 'Belum ada keluarga' }}</small>
+                            </div>
+                            <small class="text-muted">{{ $anggota->created_at->format('d/m/Y') }}</small>
+                        </div>
+                        @endforeach
+                    </div>
+                    @else
+                    <p class="text-center text-muted">Belum ada anggota baru bulan ini</p>
+                    @endif
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-6">
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-calendar me-1"></i>Kegiatan Mendatang</span>
+                    <a href="{{ route('kegiatan.calendar') }}" class="btn btn-sm btn-outline-primary">Lihat Kalender</a>
+                </div>
+                <div class="card-body">
+                    @if($data['upcoming_events']->count() > 0)
+                    <div class="list-group list-group-flush">
+                        @foreach($data['upcoming_events'] as $event)
+                        <div class="list-group-item d-flex justify-content-between align-items-center px-0">
+                            <div>
+                                <div class="fw-bold">{{ $event->kegiatan->nama_kegiatan }}</div>
+                                <small class="text-muted">{{ Carbon\Carbon::parse($event->tanggal_kegiatan)->format('d M Y') }} • {{ Carbon\Carbon::parse($event->jam_mulai)->format('H:i') }}</small>
+                            </div>
+                            <span class="badge bg-primary rounded-pill">{{ $event->kegiatan->tipe_kegiatan }}</span>
+                        </div>
+                        @endforeach
+                    </div>
+                    @else
+                    <p class="text-center text-muted">Tidak ada kegiatan mendatang</p>
+                    @endif
+                </div>
+            </div>
+        </div>
+    </div>
+    @endif
+
+    {{-- PETUGAS PELAYANAN DASHBOARD --}}
+    @if($user->id_role == 3)
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-warning text-white mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="small">Konfirmasi Pending</div>
+                            <div class="fs-4 fw-bold">{{ $data['pending_confirmations'] }}</div>
+                            <div class="small">Butuh perhatian</div>
+                        </div>
+                        <div class="fs-1 opacity-50"><i class="fas fa-exclamation-triangle"></i></div>
+                    </div>
+                </div>
+                <div class="card-footer d-flex align-items-center justify-content-between">
+                    <a class="small text-white stretched-link" href="{{ route('pelayanan.index') }}">Lihat Detail</a>
+                    <div class="small text-white"><i class="fas fa-angle-right"></i></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-success text-white mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="small">Presensi Hari Ini</div>
+                            <div class="fs-4 fw-bold">{{ $data['attendance_today'] }}</div>
+                            <div class="small">orang hadir</div>
+                        </div>
+                        <div class="fs-1 opacity-50"><i class="fas fa-clipboard-check"></i></div>
+                    </div>
+                </div>
+                <div class="card-footer d-flex align-items-center justify-content-between">
+                    <a class="small text-white stretched-link" href="{{ route('kehadiran.index') }}">Input Presensi</a>
+                    <div class="small text-white"><i class="fas fa-angle-right"></i></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-primary text-white mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="small">Pelayanan Bulan Ini</div>
+                            <div class="fs-4 fw-bold">{{ $data['total_services_this_month'] }}</div>
+                            <div class="small">{{ $data['active_servants'] }} pelayan aktif</div>
+                        </div>
+                        <div class="fs-1 opacity-50"><i class="fas fa-hand-holding-heart"></i></div>
+                    </div>
+                </div>
+                <div class="card-footer d-flex align-items-center justify-content-between">
+                    <a class="small text-white stretched-link" href="{{ route('pelayanan.generator') }}">Generate Jadwal</a>
+                    <div class="small text-white"><i class="fas fa-angle-right"></i></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-info text-white mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="small">Perlu Dijadwalkan</div>
+                            <div class="fs-4 fw-bold">{{ $data['members_need_scheduling'] }}</div>
+                            <div class="small">anggota</div>
+                        </div>
+                        <div class="fs-1 opacity-50"><i class="fas fa-calendar-plus"></i></div>
+                    </div>
+                </div>
+                <div class="card-footer d-flex align-items-center justify-content-between">
+                    <a class="small text-white stretched-link" href="{{ route('pelayanan.members') }}">Lihat Anggota</a>
+                    <div class="small text-white"><i class="fas fa-angle-right"></i></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if($data['pending_services_detail']->count() > 0)
+    <div class="alert alert-warning">
+        <h6><i class="fas fa-clock me-2"></i>Konfirmasi Pending (7 Hari Ke Depan)</h6>
+        <div class="row">
+            @foreach($data['pending_services_detail'] as $service)
+            <div class="col-md-6">
+                <small>• <strong>{{ $service->anggota->nama }}</strong> - {{ $service->posisi }} ({{ Carbon\Carbon::parse($service->tanggal_pelayanan)->format('d/m') }})</small>
+            </div>
+            @endforeach
+        </div>
+    </div>
+    @endif
+
+    <div class="row">
+        <div class="col-xl-6">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="fas fa-calendar-day me-1"></i>Kegiatan Hari Ini
+                </div>
+                <div class="card-body">
+                    @if($data['todays_events']->count() > 0)
+                    <div class="list-group list-group-flush">
+                        @foreach($data['todays_events'] as $event)
+                        <div class="list-group-item d-flex justify-content-between align-items-center px-0">
+                            <div>
+                                <div class="fw-bold">{{ $event->kegiatan->nama_kegiatan }}</div>
+                                <small class="text-muted">{{ Carbon\Carbon::parse($event->jam_mulai)->format('H:i') }} - {{ Carbon\Carbon::parse($event->jam_selesai)->format('H:i') }}</small>
+                            </div>
+                            <div>
+                                <a href="{{ route('kehadiran.scan', $event->id_pelaksanaan) }}" class="btn btn-sm btn-primary">
+                                    <i class="fas fa-qrcode"></i> QR
+                                </a>
+                            </div>
+                        </div>
+                        @endforeach
+                    </div>
+                    @else
+                    <p class="text-center text-muted">Tidak ada kegiatan hari ini</p>
+                    @endif
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-6">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="fas fa-calendar-week me-1"></i>Minggu Ini
+                </div>
+                <div class="card-body">
+                    @if($data['events_this_week']->count() > 0)
+                    <div class="list-group list-group-flush">
+                        @foreach($data['events_this_week'] as $event)
+                        <div class="list-group-item d-flex justify-content-between align-items-center px-0">
+                            <div>
+                                <div class="fw-bold">{{ $event->kegiatan->nama_kegiatan }}</div>
+                                <small class="text-muted">{{ Carbon\Carbon::parse($event->tanggal_kegiatan)->format('D, d/m') }} • {{ Carbon\Carbon::parse($event->jam_mulai)->format('H:i') }}</small>
+                            </div>
+                            <span class="badge bg-{{ $event->kehadiran->count() > 0 ? 'success' : 'secondary' }} rounded-pill">
+                                {{ $event->kehadiran->count() }} hadir
+                            </span>
+                        </div>
+                        @endforeach
+                    </div>
+                    @else
+                    <p class="text-center text-muted">Tidak ada kegiatan minggu ini</p>
+                    @endif
+                </div>
+            </div>
+        </div>
+    </div>
+    @endif
+
+    {{-- ANGGOTA JEMAAT DASHBOARD --}}
+    @if($user->id_role == 4)
+    @if(isset($data['profile_incomplete']) && $data['profile_incomplete'])
+    <div class="alert alert-warning">
+        <h5><i class="fas fa-exclamation-triangle me-2"></i>Profil Belum Lengkap</h5>
+        <p>{{ $data['message'] }}</p>
+        <a href="{{ route('profile.show') }}" class="btn btn-warning">Lihat Profil</a>
+    </div>
+    @else
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h5 class="card-title">Selamat datang, {{ $data['anggota']->nama }}!</h5>
+                            <p class="card-text mb-0">{{ $data['my_pending_confirmations']->count() > 0 ? 'Anda memiliki jadwal pelayanan yang perlu dikonfirmasi' : 'Tidak ada yang perlu dikonfirmasi saat ini' }}</p>
+                        </div>
+                        <div class="text-end">
+                            @if($data['my_pending_confirmations']->count() > 0)
+                            <div class="fs-4">{{ $data['my_pending_confirmations']->count() }}</div>
+                            <small>Perlu konfirmasi</small>
+                            @else
+                            <i class="fas fa-check-circle fs-1"></i>
+                            @endif
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if($data['my_pending_confirmations']->count() > 0)
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="alert alert-warning">
+                <h6><i class="fas fa-clock me-2"></i>Konfirmasi Jadwal Pelayanan</h6>
+                <div class="row">
+                    @foreach($data['my_pending_confirmations'] as $service)
+                    <div class="col-md-6 mb-2">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>{{ $service->pelaksanaan->kegiatan->nama_kegiatan }}</strong><br>
+                                <small>{{ $service->posisi }} - {{ Carbon\Carbon::parse($service->tanggal_pelayanan)->format('d M Y') }}</small>
+                            </div>
+                            <div>
+                                <a href="{{ route('pelayanan.konfirmasi', [$service->id_pelayanan, 'terima']) }}" class="btn btn-sm btn-success me-1">
+                                    <i class="fas fa-check"></i>
+                                </a>
+                                <a href="{{ route('pelayanan.konfirmasi', [$service->id_pelayanan, 'tolak']) }}" class="btn btn-sm btn-danger">
+                                    <i class="fas fa-times"></i>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    @endforeach
+                </div>
+            </div>
+        </div>
+    </div>
+    @endif
+
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-success text-white mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="small">Pelayanan Saya</div>
+                            <div class="fs-4 fw-bold">{{ $data['my_upcoming_services']->count() }}</div>
+                            <div class="small">mendatang</div>
+                        </div>
+                        <div class="fs-1 opacity-50"><i class="fas fa-hand-holding-heart"></i></div>
+                    </div>
+                </div>
+                <div class="card-footer d-flex align-items-center justify-content-between">
+                    <a class="small text-white stretched-link" href="{{ route('pelayanan.index') }}">Lihat Jadwal</a>
+                    <div class="small text-white"><i class="fas fa-angle-right"></i></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-info text-white mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="small">Komsel Saya</div>
+                            <div class="fs-4 fw-bold">{{ $data['my_komsel']->count() }}</div>
+                            <div class="small">kelompok sel</div>
+                        </div>
+                        <div class="fs-1 opacity-50"><i class="fas fa-users"></i></div>
+                    </div>
+                </div>
+                <div class="card-footer d-flex align-items-center justify-content-between">
+                    <a class="small text-white stretched-link" href="{{ route('komsel.index') }}">Lihat Komsel</a>
+                    <div class="small text-white"><i class="fas fa-angle-right"></i></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-primary text-white mb-4">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="small">Kehadiran Bulan Ini</div>
+                            <div class="fs-4 fw-bold">{{ $data['my_attendance_this_month'] }}</div>
+                            <div class="small">kali hadir</div>
+                        </div>
+                        <div class="fs-1 opacity-50"><i class="fas fa-calendar-check"></i></div>
+                    </div>
+                </div>
+                <div class="card-footer d-flex align-items-center justify-content-between">
+                    <a class="small text-white stretched-link" href="{{ route('laporan.personal-report') }}">Lihat Riwayat</a>
+                    <div class="small text-white"><i class="fas fa-angle-right"></i></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card bg-warning text-white mb-4">
+                <div class="card-body">
+                    <div class="text-center">
+                        <div class="fs-1 mb-2"><i class="fas fa-qrcode"></i></div>
+                        <div class="small">Scan QR</div>
+                        <div class="small">Presensi Cepat</div>
+                    </div>
+                </div>
+                <div class="card-footer d-flex align-items-center justify-content-between">
+                    <a class="small text-white stretched-link" href="{{ route('kehadiran.scan') }}">Buka Scanner</a>
+                    <div class="small text-white"><i class="fas fa-angle-right"></i></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        @if($data['todays_events']->count() > 0)
+        <div class="col-xl-6">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="fas fa-calendar-day me-1"></i>Kegiatan Hari Ini
+                </div>
+                <div class="card-body">
+                    <div class="list-group list-group-flush">
+                        @foreach($data['todays_events'] as $event)
+                        <div class="list-group-item d-flex justify-content-between align-items-center px-0">
+                            <div>
+                                <div class="fw-bold">{{ $event->kegiatan->nama_kegiatan }}</div>
+                                <small class="text-muted">{{ Carbon\Carbon::parse($event->jam_mulai)->format('H:i') }} - {{ Carbon\Carbon::parse($event->jam_selesai)->format('H:i') }}</small>
+                                @if($event->lokasi)
+                                <br><small class="text-muted"><i class="fas fa-map-marker-alt me-1"></i>{{ $event->lokasi }}</small>
+                                @endif
+                            </div>
+                            <a href="{{ route('kehadiran.scan', $event->id_pelaksanaan) }}" class="btn btn-sm btn-primary">
+                                <i class="fas fa-qrcode"></i> Presensi
+                            </a>
+                        </div>
+                        @endforeach
                     </div>
                 </div>
             </div>
         </div>
         @endif
-        
-        @if(isset($data['jadwal_pelayanan']) && count($data['jadwal_pelayanan']) > 0)
+
         <div class="col-xl-6">
             <div class="card mb-4">
                 <div class="card-header">
-                    <i class="fas fa-hand-holding-heart me-1"></i>
-                    Jadwal Pelayanan
+                    <i class="fas fa-hand-holding-heart me-1"></i>Jadwal Pelayanan Mendatang
                 </div>
                 <div class="card-body">
-                    <div class="table-responsive">
-                        <table class="table table-bordered">
-                            <thead>
-                                <tr>
-                                    <th>Nama</th>
-                                    <th>Kegiatan</th>
-                                    <th>Tanggal</th>
-                                    <th>Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach($data['jadwal_pelayanan'] as $jadwal)
-                                    <tr>
-                                        <td>{{ $jadwal->anggota->nama }}</td>
-                                        <td>{{ $jadwal->kegiatan->nama_kegiatan }}</td>
-                                        <td>{{ \Carbon\Carbon::parse($jadwal->tanggal_pelayanan)->format('d M Y') }}</td>
-                                        <td>
-                                            @if($jadwal->status_konfirmasi == 'belum')
-                                                <span class="badge bg-warning">Belum Konfirmasi</span>
-                                            @elseif($jadwal->status_konfirmasi == 'terima')
-                                                <span class="badge bg-success">Diterima</span>
-                                            @else
-                                                <span class="badge bg-danger">Ditolak</span>
-                                            @endif
-                                        </td>
-                                    </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
+                    @if($data['my_upcoming_services']->count() > 0)
+                    <div class="list-group list-group-flush">
+                        @foreach($data['my_upcoming_services'] as $service)
+                        <div class="list-group-item d-flex justify-content-between align-items-center px-0">
+                            <div>
+                                <div class="fw-bold">{{ $service->pelaksanaan->kegiatan->nama_kegiatan }}</div>
+                                <small class="text-muted">{{ $service->posisi }} • {{ Carbon\Carbon::parse($service->tanggal_pelayanan)->format('d M Y') }}</small>
+                            </div>
+                            <span class="badge bg-{{ $service->status_konfirmasi == 'terima' ? 'success' : ($service->status_konfirmasi == 'tolak' ? 'danger' : 'warning') }}">
+                                {{ ucfirst($service->status_konfirmasi) }}
+                            </span>
+                        </div>
+                        @endforeach
+                    </div>
+                    @else
+                    <p class="text-center text-muted">Tidak ada jadwal pelayanan mendatang</p>
+                    @endif
+                </div>
+            </div>
+        </div>
+
+        @if($data['upcoming_komsel_meetings']->count() > 0)
+        <div class="col-xl-6">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="fas fa-users me-1"></i>Pertemuan Komsel Mendatang
+                </div>
+                <div class="card-body">
+                    <div class="list-group list-group-flush">
+                        @foreach($data['upcoming_komsel_meetings'] as $meeting)
+                        <div class="list-group-item d-flex justify-content-between align-items-center px-0">
+                            <div>
+                                <div class="fw-bold">{{ $meeting->kegiatan->nama_kegiatan }}</div>
+                                <small class="text-muted">{{ Carbon\Carbon::parse($meeting->tanggal_kegiatan)->format('d M Y') }} • {{ Carbon\Carbon::parse($meeting->jam_mulai)->format('H:i') }}</small>
+                            </div>
+                            <a href="{{ route('kehadiran.scan', $meeting->id_pelaksanaan) }}" class="btn btn-sm btn-outline-primary">
+                                <i class="fas fa-qrcode"></i>
+                            </a>
+                        </div>
+                        @endforeach
                     </div>
                 </div>
             </div>
         </div>
         @endif
-        
-        @if(isset($data['jadwal_pelayanan_saya']) && count($data['jadwal_pelayanan_saya']) > 0)
+
+        @if($data['my_family']->count() > 0)
         <div class="col-xl-6">
             <div class="card mb-4">
                 <div class="card-header">
-                    <i class="fas fa-hand-holding-heart me-1"></i>
-                    Jadwal Pelayanan Saya
+                    <i class="fas fa-home me-1"></i>Keluarga Saya
                 </div>
                 <div class="card-body">
-                    <div class="table-responsive">
-                        <table class="table table-bordered">
-                            <thead>
-                                <tr>
-                                    <th>Kegiatan</th>
-                                    <th>Tanggal</th>
-                                    <th>Posisi</th>
-                                    <th>Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach($data['jadwal_pelayanan_saya'] as $jadwal)
-                                    <tr>
-                                        <td>{{ $jadwal->kegiatan->nama_kegiatan }}</td>
-                                        <td>{{ \Carbon\Carbon::parse($jadwal->tanggal_pelayanan)->format('d M Y') }}</td>
-                                        <td>{{ $jadwal->posisi }}</td>
-                                        <td>
-                                            @if($jadwal->status_konfirmasi == 'belum')
-                                                <span class="badge bg-warning">Belum Konfirmasi</span>
-                                            @elseif($jadwal->status_konfirmasi == 'terima')
-                                                <span class="badge bg-success">Diterima</span>
-                                            @else
-                                                <span class="badge bg-danger">Ditolak</span>
-                                            @endif
-                                        </td>
-                                    </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-        @endif
-        
-        @if(isset($data['komsel_saya']) && count($data['komsel_saya']) > 0)
-        <div class="col-xl-6">
-            <div class="card mb-4">
-                <div class="card-header">
-                    <i class="fas fa-users me-1"></i>
-                    Komsel Saya
-                </div>
-                <div class="card-body">
-                    <div class="table-responsive">
-                        <table class="table table-bordered">
-                            <thead>
-                                <tr>
-                                    <th>Nama Komsel</th>
-                                    <th>Hari</th>
-                                    <th>Waktu</th>
-                                    <th>Lokasi</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach($data['komsel_saya'] as $komsel)
-                                    <tr>
-                                        <td>{{ $komsel->nama_komsel }}</td>
-                                        <td>{{ $komsel->hari }}</td>
-                                        <td>{{ \Carbon\Carbon::parse($komsel->jam_mulai)->format('H:i') }} - 
-                                            {{ \Carbon\Carbon::parse($komsel->jam_selesai)->format('H:i') }}</td>
-                                        <td>{{ $komsel->lokasi }}</td>
-                                    </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
+                    <div class="list-group list-group-flush">
+                        @foreach($data['my_family'] as $family)
+                        <div class="list-group-item d-flex justify-content-between align-items-center px-0">
+                            <div>
+                                <div class="fw-bold">{{ $family->nama }}</div>
+                                <small class="text-muted">{{ $data['anggota']->getHubunganDengan($family->id_anggota) }}</small>
+                            </div>
+                            <small class="text-muted">{{ Carbon\Carbon::parse($family->tanggal_lahir)->age }} tahun</small>
+                        </div>
+                        @endforeach
                     </div>
                 </div>
             </div>
         </div>
         @endif
     </div>
+    @endif
+    @endif
+
 </div>
+
+<style>
+.card {
+    border: none;
+    border-radius: 10px;
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    transition: all 0.3s ease;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+.card-body {
+    padding: 1.5rem;
+}
+
+.badge {
+    font-size: 0.75em;
+}
+
+.list-group-item {
+    border: none;
+    border-bottom: 1px solid rgba(0,0,0,0.125);
+    padding: 0.75rem 0;
+}
+
+.list-group-item:last-child {
+    border-bottom: none;
+}
+
+.alert {
+    border: none;
+    border-radius: 10px;
+}
+
+.btn-sm {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.875rem;
+}
+
+@media (max-width: 768px) {
+    .fs-4 {
+        font-size: 1.25rem !important;
+    }
+    
+    .fs-1 {
+        font-size: 1.5rem !important;
+    }
+}
+</style>
+@endsection
+
+@section('scripts')
+<script>
+// Auto-refresh for real-time updates (optional)
+@if($user->id_role <= 3)
+setInterval(function() {
+    // Check for new notifications or pending confirmations
+    fetch('{{ route("dashboard") }}')
+        .then(response => response.text())
+        .then(data => {
+            // Update notification badge if needed
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(data, 'text/html');
+            const newBadge = doc.querySelector('.navbar .badge');
+            const currentBadge = document.querySelector('.navbar .badge');
+            
+            if (newBadge && currentBadge) {
+                if (newBadge.textContent !== currentBadge.textContent) {
+                    currentBadge.textContent = newBadge.textContent;
+                    currentBadge.classList.add('animate__animated', 'animate__pulse');
+                }
+            }
+        })
+        .catch(error => console.log('Refresh error:', error));
+}, 300000); // 5 minutes
+@endif
+
+// Initialize tooltips for better UX
+document.addEventListener('DOMContentLoaded', function() {
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+});
+</script>
 @endsection
