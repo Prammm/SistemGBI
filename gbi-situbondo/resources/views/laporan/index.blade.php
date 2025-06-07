@@ -280,28 +280,6 @@
         </div>
     @endif
 
-    @if(Auth::user()->id_role <= 2)
-        <div class="card mt-4">
-            <div class="card-header">
-                <i class="fas fa-crown me-2"></i>Fitur Administrator/Pengurus
-            </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-4">
-                        <h6><i class="fas fa-users-cog me-2"></i>Multi-User Access</h6>
-                        <p class="small">Laporan dengan badge "Multi User" memungkinkan Anda melihat laporan pribadi anggota lain untuk keperluan supervisi.</p>
-                    </div>
-                    <div class="col-md-4">
-                        <h6><i class="fas fa-chart-line me-2"></i>Analisis Komprehensif</h6>
-                        <p class="small">Akses dashboard analitik dengan visualisasi data lengkap untuk pengambilan keputusan strategis.</p>
-                    </div>
-                    <div class="col-md-4">
-                        <h6><i class="fas fa-download me-2"></i>Export & Print</h6>
-                        <p class="small">Semua laporan mendukung export ke PDF/Excel dan print untuk keperluan dokumentasi.</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    @endif
+
 </div>
 @endsection

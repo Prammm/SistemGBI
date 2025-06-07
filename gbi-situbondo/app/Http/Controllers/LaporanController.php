@@ -86,10 +86,10 @@ class LaporanController extends Controller
                 'color' => 'dashboard'
             ];
             
-            // Personal reports with user selection capability
+            // Personal reports with user selection capability for Admin & Pengurus
             $reports['kehadiran-personal'] = [
                 'title' => 'Kehadiran Pribadi',
-                'description' => 'Melihat riwayat kehadiran pribadi (dapat memilih anggota lain).',
+                'description' => 'Melihat riwayat kehadiran pribadi (dapat memilih anggota lain untuk supervisori).',
                 'route' => 'laporan.personal-report',
                 'icon' => 'fa-user-check',
                 'color' => 'kehadiran',
@@ -98,7 +98,7 @@ class LaporanController extends Controller
             
             $reports['pelayanan-personal'] = [
                 'title' => 'Riwayat Pelayanan Pribadi',
-                'description' => 'Melihat riwayat pelayanan pribadi (dapat memilih anggota lain).',
+                'description' => 'Melihat riwayat pelayanan pribadi (dapat memilih anggota lain untuk supervisori).',
                 'route' => 'laporan.personal-service-report',
                 'icon' => 'fa-hand-holding-heart',
                 'color' => 'pelayanan',
@@ -107,7 +107,7 @@ class LaporanController extends Controller
             
             $reports['komsel-leader'] = [
                 'title' => 'Laporan Komsel (Pemimpin)',
-                'description' => 'Melihat laporan komsel sebagai pemimpin (dapat memilih komsel).',
+                'description' => 'Melihat laporan komsel sebagai pemimpin (dapat memilih pemimpin komsel lain).',
                 'route' => 'laporan.komsel-report',
                 'icon' => 'fa-users-cog',
                 'color' => 'komsel',
@@ -133,40 +133,27 @@ class LaporanController extends Controller
                 'color' => 'pelayanan'
             ];
             
-            // Personal reports for themselves
-            $reports['kehadiran-personal'] = [
-                'title' => 'Kehadiran Pribadi',
-                'description' => 'Melihat riwayat kehadiran pribadi Anda.',
-                'route' => 'laporan.personal-report',
-                'icon' => 'fa-user-check',
-                'color' => 'kehadiran'
-            ];
+            // TIDAK ADA kehadiran-personal untuk Petugas Pelayanan sesuai requirement
             
-            // Service reports with user selection
+            // Service reports with user selection - Petugas Pelayanan bisa pilih anggota lain
             $reports['pelayanan-personal'] = [
                 'title' => 'Riwayat Pelayanan',
-                'description' => 'Melihat riwayat pelayanan (dapat memilih anggota lain).',
+                'description' => 'Melihat riwayat pelayanan (dapat memilih anggota lain untuk supervisori).',
                 'route' => 'laporan.personal-service-report',
                 'icon' => 'fa-hand-holding-heart',
                 'color' => 'pelayanan',
                 'can_select_user' => true
             ];
             
-            // Check if user is a komsel leader
-            if ($user->id_anggota) {
-                $anggota = Anggota::find($user->id_anggota);
-                $isKomselLeader = Komsel::where('id_pemimpin', $anggota->id_anggota)->exists();
-                
-                if ($isKomselLeader) {
-                    $reports['komsel-leader'] = [
-                        'title' => 'Laporan Komsel',
-                        'description' => 'Melihat statistik kehadiran dan aktivitas komsel yang Anda pimpin.',
-                        'route' => 'laporan.komsel-report',
-                        'icon' => 'fa-users',
-                        'color' => 'komsel'
-                    ];
-                }
-            }
+            // Komsel reports with user selection - Petugas Pelayanan bisa pilih pemimpin komsel lain
+            $reports['komsel-leader'] = [
+                'title' => 'Laporan Komsel',
+                'description' => 'Melihat statistik kehadiran dan aktivitas komsel (dapat memilih pemimpin komsel).',
+                'route' => 'laporan.komsel-report',
+                'icon' => 'fa-users',
+                'color' => 'komsel',
+                'can_select_user' => true
+            ];
         }
         // Anggota Jemaat
         elseif ($user->id_role == 4) {

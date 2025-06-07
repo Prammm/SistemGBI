@@ -56,7 +56,7 @@
         margin-bottom: 20px;
         box-shadow: 0 5px 15px rgba(0,0,0,0.08);
         position: relative;
-        height: 400px; /* Fixed height untuk mencegah pertumbuhan tidak terkendali */
+        height: 400px;
     }
     
     .chart-title {
@@ -70,9 +70,9 @@
     
     .chart-wrapper {
         position: relative;
-        height: 300px; /* Fixed height untuk wrapper canvas */
+        height: 300px;
         width: 100%;
-        overflow: hidden; /* Mencegah canvas keluar dari container */
+        overflow: hidden;
     }
     
     .chart-wrapper canvas {
@@ -212,7 +212,67 @@
         font-size: 0.95rem;
     }
     
-            @media (max-width: 768px) {
+    .user-selector-card {
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 15px;
+        padding: 20px;
+        margin-bottom: 20px;
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    
+    .user-selector-title {
+        color: white;
+        font-weight: 600;
+        margin-bottom: 15px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    
+    .user-selector-form {
+        display: flex;
+        gap: 15px;
+        align-items: end;
+        flex-wrap: wrap;
+    }
+    
+    .user-selector-form .form-group {
+        flex: 1;
+        min-width: 250px;
+    }
+    
+    .user-selector-form label {
+        color: rgba(255, 255, 255, 0.9);
+        font-size: 0.9rem;
+        margin-bottom: 8px;
+        display: block;
+    }
+    
+    .user-selector-form select {
+        background: rgba(255, 255, 255, 0.9);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        border-radius: 8px;
+        padding: 10px 15px;
+        color: #333;
+        width: 100%;
+    }
+    
+    .user-selector-form select:focus {
+        background: white;
+        border-color: #667eea;
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+    
+    .user-selector-form .btn {
+        padding: 10px 20px;
+        border-radius: 8px;
+        font-weight: 500;
+        white-space: nowrap;
+    }
+    
+    @media (max-width: 768px) {
         .report-header {
             padding: 20px;
         }
@@ -236,16 +296,25 @@
         }
         
         .chart-container {
-            height: 350px; /* Reduce height untuk mobile */
+            height: 350px;
         }
         
         .chart-wrapper {
-            height: 250px; /* Reduce height untuk mobile */
+            height: 250px;
         }
         
         .chart-wrapper canvas {
             max-width: 100% !important;
             max-height: 100% !important;
+        }
+        
+        .user-selector-form {
+            flex-direction: column;
+        }
+        
+        .user-selector-form .form-group {
+            width: 100%;
+            min-width: unset;
         }
     }
 </style>
@@ -261,6 +330,46 @@
     </ol>
     
     <div class="report-header">
+        {{-- User Selection for Admin/Pengurus --}}
+        @if($canSelectUser && $allUsers->count() > 0)
+            <div class="user-selector-card">
+                <div class="user-selector-title">
+                    <i class="fas fa-users"></i>
+                    <span>Pilih Anggota untuk Melihat Laporan</span>
+                </div>
+                <form method="GET" action="{{ route('laporan.personal-report') }}" class="user-selector-form">
+                    <div class="form-group">
+                        <label for="user_id">Pilih Anggota:</label>
+                        <select id="user_id" name="user_id" class="form-select">
+                            <option value="">-- Pilih Anggota --</option>
+                            @foreach($allUsers as $user)
+                                <option value="{{ $user->id }}" {{ $selectedUserId == $user->id ? 'selected' : '' }}>
+                                    {{ $user->anggota->nama ?? $user->name }} 
+                                    @if($user->anggota && $user->anggota->keluarga)
+                                        ({{ $user->anggota->keluarga->nama_keluarga }})
+                                    @endif
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="period">Periode:</label>
+                        <select id="period" name="period" class="form-select">
+                            <option value="1" {{ $period == 1 ? 'selected' : '' }}>1 Bulan</option>
+                            <option value="3" {{ $period == 3 ? 'selected' : '' }}>3 Bulan</option>
+                            <option value="6" {{ $period == 6 ? 'selected' : '' }}>6 Bulan</option>
+                            <option value="12" {{ $period == 12 ? 'selected' : '' }}>1 Tahun</option>
+                        </select>
+                    </div>
+                    <div>
+                        <button type="submit" class="btn btn-light">
+                            <i class="fas fa-search me-2"></i>Lihat Laporan
+                        </button>
+                    </div>
+                </form>
+            </div>
+        @endif
+        
         <div class="profile-section">
             <div class="profile-avatar">
                 {{ strtoupper(substr($anggota->nama, 0, 1)) }}
@@ -272,20 +381,26 @@
                     @if($anggota->keluarga)
                         <div><i class="fas fa-home me-2"></i>Keluarga: {{ $anggota->keluarga->nama_keluarga }}</div>
                     @endif
+                    @if($canSelectUser && $selectedUserId)
+                        <div><i class="fas fa-eye me-2"></i>Laporan Supervisori</div>
+                    @endif
                 </div>
             </div>
         </div>
     </div>
     
-    <div class="filter-card">
-        <h5><i class="fas fa-filter me-2"></i>Filter Periode</h5>
-        <div class="period-selector">
-            <button class="period-btn" data-period="1">1 Bulan</button>
-            <button class="period-btn" data-period="3">3 Bulan</button>
-            <button class="period-btn active" data-period="6">6 Bulan</button>
-            <button class="period-btn" data-period="12">1 Tahun</button>
+    {{-- Period selector for non-admin users or when no user selected --}}
+    @if(!$canSelectUser || !$selectedUserId)
+        <div class="filter-card">
+            <h5><i class="fas fa-filter me-2"></i>Filter Periode</h5>
+            <div class="period-selector">
+                <button class="period-btn" data-period="1">1 Bulan</button>
+                <button class="period-btn" data-period="3">3 Bulan</button>
+                <button class="period-btn active" data-period="6">6 Bulan</button>
+                <button class="period-btn" data-period="12">1 Tahun</button>
+            </div>
         </div>
-    </div>
+    @endif
     
     <div class="row">
         <div class="col-md-4">
@@ -304,7 +419,7 @@
                     {{ $kehadiranPerBulan->count() > 0 ? round($kehadiranPerBulan->avg(), 1) : 0 }}
                 </div>
                 <div class="stats-description">
-                    Kehadiran bulanan Anda
+                    Kehadiran bulanan {{ $canSelectUser && $selectedUserId ? $anggota->nama : 'Anda' }}
                 </div>
             </div>
         </div>
@@ -381,10 +496,12 @@
             <div class="no-data-message">
                 <i class="fas fa-calendar-times"></i>
                 <h5>Belum Ada Data Kehadiran</h5>
-                <p>Anda belum memiliki catatan kehadiran dalam {{ $startDate->diffInMonths($endDate) }} bulan terakhir.</p>
-                <a href="{{ route('kehadiran.index') }}" class="btn btn-primary">
-                    <i class="fas fa-qrcode me-2"></i>Mulai Presensi
-                </a>
+                <p>{{ $canSelectUser && $selectedUserId ? $anggota->nama : 'Anda' }} belum memiliki catatan kehadiran dalam {{ $startDate->diffInMonths($endDate) }} bulan terakhir.</p>
+                @if(!$canSelectUser || !$selectedUserId)
+                    <a href="{{ route('kehadiran.index') }}" class="btn btn-primary">
+                        <i class="fas fa-qrcode me-2"></i>Mulai Presensi
+                    </a>
+                @endif
             </div>
         </div>
     @endif
@@ -543,29 +660,31 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     @endif
     
-    // Period selector
-    document.querySelectorAll('.period-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-            // Hancurkan chart sebelum navigasi
-            destroyExistingCharts();
-            
-            const period = this.dataset.period;
-            const url = new URL(window.location);
-            url.searchParams.set('period', period);
-            window.location.href = url.toString();
+    // Period selector - only for non-admin users or when no user selected
+    @if(!$canSelectUser || !$selectedUserId)
+        document.querySelectorAll('.period-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                // Hancurkan chart sebelum navigasi
+                destroyExistingCharts();
+                
+                const period = this.dataset.period;
+                const url = new URL(window.location);
+                url.searchParams.set('period', period);
+                window.location.href = url.toString();
+            });
         });
-    });
-    
-    // Set active period based on URL parameter
-    const urlParams = new URLSearchParams(window.location.search);
-    const currentPeriod = urlParams.get('period') || '6';
-    
-    document.querySelectorAll('.period-btn').forEach(btn => {
-        btn.classList.remove('active');
-        if (btn.dataset.period === currentPeriod) {
-            btn.classList.add('active');
-        }
-    });
+        
+        // Set active period based on URL parameter
+        const urlParams = new URLSearchParams(window.location.search);
+        const currentPeriod = urlParams.get('period') || '6';
+        
+        document.querySelectorAll('.period-btn').forEach(btn => {
+            btn.classList.remove('active');
+            if (btn.dataset.period === currentPeriod) {
+                btn.classList.add('active');
+            }
+        });
+    @endif
     
     // Cleanup saat halaman akan ditinggalkan
     window.addEventListener('beforeunload', function() {

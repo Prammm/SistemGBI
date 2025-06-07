@@ -22,6 +22,64 @@
         box-shadow: 0 5px 15px rgba(0,0,0,0.08);
     }
     
+    .user-selector-card {
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 15px;
+        padding: 20px;
+        margin-bottom: 20px;
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    
+    .user-selector-title {
+        color: white;
+        font-weight: 600;
+        margin-bottom: 15px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    
+    .user-selector-form {
+        display: grid;
+        grid-template-columns: 1fr 1fr auto;
+        gap: 15px;
+        align-items: end;
+    }
+    
+    .user-selector-form .form-group {
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .user-selector-form label {
+        color: rgba(255, 255, 255, 0.9);
+        font-size: 0.9rem;
+        margin-bottom: 8px;
+    }
+    
+    .user-selector-form select {
+        background: rgba(255, 255, 255, 0.9);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        border-radius: 8px;
+        padding: 10px 15px;
+        color: #333;
+    }
+    
+    .user-selector-form select:focus {
+        background: white;
+        border-color: #f6c23e;
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(246, 194, 62, 0.1);
+    }
+    
+    .user-selector-form .btn {
+        padding: 10px 20px;
+        border-radius: 8px;
+        font-weight: 500;
+        white-space: nowrap;
+    }
+    
     .stats-overview {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -294,6 +352,11 @@
             max-width: 100% !important;
             max-height: 100% !important;
         }
+        
+        .user-selector-form {
+            grid-template-columns: 1fr;
+            gap: 15px;
+        }
     }
 </style>
 @endsection
@@ -308,6 +371,44 @@
     </ol>
     
     <div class="komsel-header">
+        {{-- User Selection for Admin/Pengurus/Petugas Pelayanan --}}
+        @if($canSelectUser && $komselLeaders->count() > 0)
+            <div class="user-selector-card">
+                <div class="user-selector-title">
+                    <i class="fas fa-users"></i>
+                    <span>Pilih Pemimpin Komsel untuk Melihat Laporan</span>
+                </div>
+                <form method="GET" action="{{ route('laporan.komsel-report') }}" class="user-selector-form">
+                    <div class="form-group">
+                        <label for="user_id">Pilih Pemimpin Komsel:</label>
+                        <select id="user_id" name="user_id" class="form-select">
+                            <option value="">-- Pilih Pemimpin Komsel --</option>
+                            @foreach($komselLeaders as $user)
+                                <option value="{{ $user->id }}" {{ $selectedUserId == $user->id ? 'selected' : '' }}>
+                                    {{ $user->anggota->nama ?? $user->name }}
+                                    @php
+                                        $userKomsel = \App\Models\Komsel::where('id_pemimpin', $user->anggota->id_anggota)->first();
+                                    @endphp
+                                    @if($userKomsel)
+                                        ({{ $userKomsel->nama_komsel }})
+                                    @endif
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="start_date">Tanggal Mulai:</label>
+                        <input type="date" id="start_date" name="start_date" class="form-control" value="{{ $startDate->format('Y-m-d') }}">
+                    </div>
+                    <div>
+                        <button type="submit" class="btn btn-light">
+                            <i class="fas fa-search me-2"></i>Lihat Laporan
+                        </button>
+                    </div>
+                </form>
+            </div>
+        @endif
+        
         <div class="row align-items-center">
             <div class="col-md-8">
                 <h2><i class="fas fa-users me-3"></i>{{ $selectedKomsel->nama_komsel }}</h2>
@@ -317,6 +418,10 @@
                     <i class="fas fa-users me-2"></i>{{ $selectedKomsel->anggota->count() }} Anggota
                     &nbsp;•&nbsp;
                     <i class="fas fa-calendar me-2"></i>{{ $selectedKomsel->hari ?? 'Belum dijadwalkan' }}
+                    @if($canSelectUser && $selectedUserId)
+                        &nbsp;•&nbsp;
+                        <i class="fas fa-eye me-2"></i>Laporan Supervisori
+                    @endif
                 </p>
             </div>
             <div class="col-md-4 text-md-end">
@@ -326,38 +431,41 @@
         </div>
     </div>
     
-    <div class="komsel-selector">
-        <h5><i class="fas fa-filter me-2"></i>Filter Laporan</h5>
-        <form method="GET" action="{{ route('laporan.komsel-report') }}">
-            <div class="filter-section">
-                @if($komselLead->count() > 1)
-                    <div class="flex-fill">
-                        <label for="komsel_id" class="form-label">Pilih Komsel</label>
-                        <select id="komsel_id" name="komsel_id" class="form-select">
-                            @foreach($komselLead as $komsel)
-                                <option value="{{ $komsel->id_komsel }}" {{ $selectedKomsel->id_komsel == $komsel->id_komsel ? 'selected' : '' }}>
-                                    {{ $komsel->nama_komsel }}
-                                </option>
-                            @endforeach
-                        </select>
+    {{-- Filter untuk user yang tidak dapat memilih user lain --}}
+    @if(!$canSelectUser || !$selectedUserId)
+        <div class="komsel-selector">
+            <h5><i class="fas fa-filter me-2"></i>Filter Laporan</h5>
+            <form method="GET" action="{{ route('laporan.komsel-report') }}">
+                <div class="filter-section">
+                    @if($komselLead->count() > 1)
+                        <div class="flex-fill">
+                            <label for="komsel_id" class="form-label">Pilih Komsel</label>
+                            <select id="komsel_id" name="komsel_id" class="form-select">
+                                @foreach($komselLead as $komsel)
+                                    <option value="{{ $komsel->id_komsel }}" {{ $selectedKomsel->id_komsel == $komsel->id_komsel ? 'selected' : '' }}>
+                                        {{ $komsel->nama_komsel }}
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
+                    @endif
+                    <div>
+                        <label for="start_date" class="form-label">Tanggal Mulai</label>
+                        <input type="date" id="start_date" name="start_date" class="form-control" value="{{ $startDate->format('Y-m-d') }}">
                     </div>
-                @endif
-                <div>
-                    <label for="start_date" class="form-label">Tanggal Mulai</label>
-                    <input type="date" id="start_date" name="start_date" class="form-control" value="{{ $startDate->format('Y-m-d') }}">
+                    <div>
+                        <label for="end_date" class="form-label">Tanggal Selesai</label>
+                        <input type="date" id="end_date" name="end_date" class="form-control" value="{{ $endDate->format('Y-m-d') }}">
+                    </div>
+                    <div>
+                        <button type="submit" class="btn btn-warning">
+                            <i class="fas fa-search me-2"></i>Terapkan Filter
+                        </button>
+                    </div>
                 </div>
-                <div>
-                    <label for="end_date" class="form-label">Tanggal Selesai</label>
-                    <input type="date" id="end_date" name="end_date" class="form-control" value="{{ $endDate->format('Y-m-d') }}">
-                </div>
-                <div>
-                    <button type="submit" class="btn btn-warning">
-                        <i class="fas fa-search me-2"></i>Terapkan Filter
-                    </button>
-                </div>
-            </div>
-        </form>
-    </div>
+            </form>
+        </div>
+    @endif
     
     @if($pelaksanaanKomsel->count() > 0)
         <div class="stats-overview">
@@ -497,9 +605,11 @@
                 <i class="fas fa-calendar-times"></i>
                 <h5>Tidak Ada Data Pertemuan</h5>
                 <p>Belum ada pertemuan komsel yang terjadwal dalam periode yang dipilih.</p>
-                <a href="{{ route('komsel.show', $selectedKomsel->id_komsel) }}" class="btn btn-warning">
-                    <i class="fas fa-calendar-plus me-2"></i>Jadwalkan Pertemuan
-                </a>
+                @if(!$canSelectUser || !$selectedUserId)
+                    <a href="{{ route('komsel.show', $selectedKomsel->id_komsel) }}" class="btn btn-warning">
+                        <i class="fas fa-calendar-plus me-2"></i>Jadwalkan Pertemuan
+                    </a>
+                @endif
             </div>
         </div>
     @endif
