@@ -10,57 +10,59 @@ use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 use App\Models\PelaksanaanKegiatan;
 use App\Models\Komsel;
+use App\Models\Anggota;
 use Carbon\Carbon;
 
-class KomselReminder extends Mailable
+class KomselReminder extends Mailable implements ShouldQueue
 {
     use Queueable, SerializesModels;
 
     public $pelaksanaan;
     public $komsel;
+    public $anggota;
+    public $reminderType;
 
-    /**
-     * Create a new message instance.
-     */
-    public function __construct(PelaksanaanKegiatan $pelaksanaan, Komsel $komsel)
+    public function __construct(PelaksanaanKegiatan $pelaksanaan, Komsel $komsel, Anggota $anggota, $reminderType = 'day_before')
     {
         $this->pelaksanaan = $pelaksanaan;
         $this->komsel = $komsel;
+        $this->anggota = $anggota;
+        $this->reminderType = $reminderType;
     }
 
-    /**
-     * Get the message envelope.
-     */
     public function envelope(): Envelope
     {
+        $subjects = [
+            'week_before' => 'Pengingat Pertemuan Komsel Minggu Depan',
+            'day_before' => 'Pengingat Pertemuan Komsel Besok',
+            'day_of' => 'Pengingat Pertemuan Komsel Hari Ini'
+        ];
+
         return new Envelope(
-            subject: 'Pengingat Pertemuan Komsel - GBI Situbondo',
+            subject: ($subjects[$this->reminderType] ?? $subjects['day_before']) . ' - GBI Situbondo',
         );
     }
 
-    /**
-     * Get the message content definition.
-     */
     public function content(): Content
     {
         return new Content(
-            view: 'emails.komsel-reminder',
+            view: 'emails.enhanced-komsel-reminder',
             with: [
+                'nama_anggota' => $this->anggota->nama,
                 'nama_komsel' => $this->komsel->nama_komsel,
                 'tanggal' => Carbon::parse($this->pelaksanaan->tanggal_kegiatan)->format('d F Y'),
+                'hari' => Carbon::parse($this->pelaksanaan->tanggal_kegiatan)->isoFormat('dddd'),
                 'jam_mulai' => Carbon::parse($this->pelaksanaan->jam_mulai)->format('H:i'),
                 'jam_selesai' => Carbon::parse($this->pelaksanaan->jam_selesai)->format('H:i'),
-                'lokasi' => $this->pelaksanaan->lokasi ?: $this->komsel->lokasi ?: 'Gereja',
-                'pemimpin' => $this->komsel->pemimpin ? $this->komsel->pemimpin->nama : 'Belum ditentukan',
+                'lokasi' => $this->pelaksanaan->lokasi ?: $this->komsel->lokasi ?: 'Lokasi akan diinformasikan',
+                'pemimpin' => $this->komsel->pemimpin ? $this->komsel->pemimpin->nama : 'Akan diinformasikan',
+                'pemimpin_contact' => $this->komsel->pemimpin ? $this->komsel->pemimpin->no_telepon : null,
+                'reminder_type' => $this->reminderType,
+                'attendance_url' => route('kehadiran.scan', $this->pelaksanaan->id_pelaksanaan),
             ],
         );
     }
 
-    /**
-     * Get the attachments for the message.
-     *
-     * @return array<int, \Illuminate\Mail\Mailables\Attachment>
-     */
     public function attachments(): array
     {
         return [];

@@ -52,6 +52,20 @@ return [
 
     'channels' => [
 
+        'notifications' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/notifications.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => 14,
+        ],
+        
+        'email_failures' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/email-failures.log'),
+            'level' => 'error',
+            'days' => 30,
+        ],
+
         'stack' => [
             'driver' => 'stack',
             'channels' => explode(',', env('LOG_STACK', 'single')),

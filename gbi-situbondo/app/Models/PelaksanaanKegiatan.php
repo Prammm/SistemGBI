@@ -34,6 +34,11 @@ class PelaksanaanKegiatan extends Model
         return $this->hasMany(Kehadiran::class, 'id_pelaksanaan', 'id_pelaksanaan');
     }
     
+    public function jadwalPelayanan()
+    {
+        return $this->hasMany(JadwalPelayanan::class, 'id_pelaksanaan', 'id_pelaksanaan');
+    }
+
     public function parent()
     {
         return $this->belongsTo(PelaksanaanKegiatan::class, 'parent_id', 'id_pelaksanaan');

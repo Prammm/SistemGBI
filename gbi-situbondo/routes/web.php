@@ -54,7 +54,7 @@ Route::middleware(['auth'])->group(function () {
     Route::resource('kehadiran', KehadiranController::class);
     Route::resource('komsel', KomselController::class);
 
-    // Enhanced Pelayanan Routes
+    //  Pelayanan Routes
     Route::prefix('pelayanan')->name('pelayanan.')->group(function () {
         // Basic CRUD
         Route::get('/', [PelayananController::class, 'index'])->name('index');
@@ -384,10 +384,87 @@ Route::middleware(['auth'])->group(function () {
     Route::post('komsel/absensi/{pelaksanaan}', [KomselController::class, 'storeAbsensi'])->name('komsel.store-absensi');
     
     // Notifikasi
-    Route::get('notifikasi', [NotifikasiController::class, 'index'])->name('notifikasi.index');
-    Route::get('notifikasi/send-pelayanan', [NotifikasiController::class, 'sendPelayananReminders'])->name('notifikasi.send-pelayanan');
-    Route::get('notifikasi/send-komsel', [NotifikasiController::class, 'sendKomselReminders'])->name('notifikasi.send-komsel');
-    Route::get('notifikasi/send-ibadah', [NotifikasiController::class, 'sendIbadahReminders'])->name('notifikasi.send-ibadah');
+    Route::prefix('notifikasi')->name('notifikasi.')->middleware(['auth'])->group(function () {
+        Route::get('/', [App\Http\Controllers\NotifikasiController::class, 'index'])->name('index');
+        
+        // Manual reminder triggers (Admin/Pengurus only)
+        Route::post('/send-pelayanan', [App\Http\Controllers\NotifikasiController::class, 'sendPelayananReminders'])
+            ->name('send-pelayanan')
+            ->middleware('permission:edit_pelayanan');
+            
+        Route::post('/send-komsel', [App\Http\Controllers\NotifikasiController::class, 'sendKomselReminders'])
+            ->name('send-komsel')
+            ->middleware('permission:edit_komsel');
+            
+        Route::post('/send-ibadah', [App\Http\Controllers\NotifikasiController::class, 'sendIbadahReminders'])
+            ->name('send-ibadah')
+            ->middleware('permission:edit_kegiatan');
+        
+        // Absence checking (Admin/Pengurus only)
+        Route::post('/check-absences', [App\Http\Controllers\NotifikasiController::class, 'checkAbsences'])
+            ->name('check-absences')
+            ->middleware('permission:view_laporan');
+        
+        // Test email functionality (Admin only)
+        Route::post('/test-email', [App\Http\Controllers\NotifikasiController::class, 'testEmail'])
+            ->name('test-email')
+            ->middleware('permission:manage_system');
+        
+        // API endpoints for AJAX notifications
+        Route::prefix('api')->name('api.')->group(function () {
+            Route::get('/count', function() {
+                $user = Auth::user();
+                $count = 0;
+                
+                if ($user->id_anggota) {
+                    $count = \App\Models\JadwalPelayanan::where('id_anggota', $user->id_anggota)
+                        ->where('status_konfirmasi', 'belum')
+                        ->whereHas('pelaksanaan', function($q) {
+                            $q->where('tanggal_kegiatan', '>=', Carbon\Carbon::now()->format('Y-m-d'));
+                        })
+                        ->count();
+                }
+                
+                return response()->json(['count' => $count]);
+            })->name('count');
+            
+            Route::get('/recent', function() {
+                $user = Auth::user();
+                $notifications = [];
+                
+                if ($user->id_anggota) {
+                    $recent = \App\Models\JadwalPelayanan::with(['pelaksanaan.kegiatan'])
+                        ->where('id_anggota', $user->id_anggota)
+                        ->where('status_konfirmasi', 'belum')
+                        ->whereHas('pelaksanaan', function($q) {
+                            $q->where('tanggal_kegiatan', '>=', Carbon\Carbon::now()->format('Y-m-d'))
+                            ->where('tanggal_kegiatan', '<=', Carbon\Carbon::now()->addDays(7)->format('Y-m-d'));
+                        })
+                        ->orderBy('tanggal_pelayanan')
+                        ->limit(5)
+                        ->get();
+                    
+                    foreach ($recent as $jadwal) {
+                        $notifications[] = [
+                            'title' => 'Konfirmasi Pelayanan',
+                            'message' => 'Sebagai ' . $jadwal->posisi . ' pada ' . Carbon\Carbon::parse($jadwal->tanggal_pelayanan)->format('d/m/Y'),
+                            'url' => route('pelayanan.index'),
+                            'time' => Carbon\Carbon::parse($jadwal->tanggal_pelayanan)->diffForHumans(),
+                            'type' => 'pelayanan'
+                        ];
+                    }
+                }
+                
+                return response()->json(['notifications' => $notifications]);
+            })->name('recent');
+            
+            Route::post('/mark-read/{id}', function($id) {
+                // Implementation for marking notifications as read
+                // This would require a notifications table if you want persistent notification status
+                return response()->json(['success' => true]);
+            })->name('mark-read');
+        });
+    });
 });
 
 // Helper function - MOVED OUTSIDE routes

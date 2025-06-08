@@ -34,6 +34,14 @@ return [
             'driver' => 'sync',
         ],
 
+        'notifications' => [
+            'driver' => 'database',
+            'table' => 'jobs',
+            'queue' => 'notifications',
+            'retry_after' => 90,
+            'after_commit' => false,
+        ],
+
         'database' => [
             'driver' => 'database',
             'connection' => env('DB_QUEUE_CONNECTION'),

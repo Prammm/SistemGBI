@@ -11,53 +11,58 @@ use Illuminate\Queue\SerializesModels;
 use App\Models\JadwalPelayanan;
 use Carbon\Carbon;
 
-class PelayananReminder extends Mailable
+class EnhancedPelayananReminder extends Mailable implements ShouldQueue
 {
     use Queueable, SerializesModels;
 
     public $jadwal;
+    public $reminderType; // 'week_before', 'day_before', 'day_of'
 
-    /**
-     * Create a new message instance.
-     */
-    public function __construct(JadwalPelayanan $jadwal)
+    public function __construct(JadwalPelayanan $jadwal, $reminderType = 'day_before')
     {
         $this->jadwal = $jadwal;
+        $this->reminderType = $reminderType;
     }
 
-    /**
-     * Get the message envelope.
-     */
     public function envelope(): Envelope
     {
+        $subjects = [
+            'week_before' => 'Pengingat Jadwal Pelayanan Minggu Depan',
+            'day_before' => 'Pengingat Jadwal Pelayanan Besok',
+            'day_of' => 'Pengingat Jadwal Pelayanan Hari Ini'
+        ];
+
         return new Envelope(
-            subject: 'Pengingat Jadwal Pelayanan - GBI Situbondo',
+            subject: ($subjects[$this->reminderType] ?? $subjects['day_before']) . ' - GBI Situbondo',
         );
     }
 
-    /**
-     * Get the message content definition.
-     */
     public function content(): Content
     {
+        $pelaksanaan = $this->jadwal->pelaksanaan;
+        
         return new Content(
-            view: 'emails.pelayanan-reminder',
+            view: 'emails.enhanced-pelayanan-reminder',
             with: [
                 'nama' => $this->jadwal->anggota->nama,
-                'kegiatan' => $this->jadwal->kegiatan->nama_kegiatan,
+                'kegiatan' => $pelaksanaan ? $pelaksanaan->kegiatan->nama_kegiatan : 'Kegiatan',
                 'posisi' => $this->jadwal->posisi,
                 'tanggal' => Carbon::parse($this->jadwal->tanggal_pelayanan)->format('d F Y'),
-                'jam_mulai' => isset($this->jadwal->kegiatan->pelaksanaan) ? Carbon::parse($this->jadwal->kegiatan->pelaksanaan->first()->jam_mulai)->format('H:i') : '00:00',
-                'lokasi' => isset($this->jadwal->kegiatan->pelaksanaan) ? $this->jadwal->kegiatan->pelaksanaan->first()->lokasi : 'Gereja',
+                'hari' => Carbon::parse($this->jadwal->tanggal_pelayanan)->isoFormat('dddd'),
+                'jam_mulai' => $pelaksanaan ? Carbon::parse($pelaksanaan->jam_mulai)->format('H:i') : '00:00',
+                'jam_selesai' => $pelaksanaan ? Carbon::parse($pelaksanaan->jam_selesai)->format('H:i') : '00:00',
+                'lokasi' => $pelaksanaan ? $pelaksanaan->lokasi : 'Gereja',
+                'reminder_type' => $this->reminderType,
+                'confirmation_url' => route('pelayanan.konfirmasi', ['id' => $this->jadwal->id_pelayanan, 'status' => 'terima']),
+                'reject_url' => route('pelayanan.konfirmasi', ['id' => $this->jadwal->id_pelayanan, 'status' => 'tolak']),
+                'contact_info' => [
+                    'phone' => env('CHURCH_PHONE', '+62 123 456 789'),
+                    'email' => env('CHURCH_EMAIL', 'info@gbisitubondo.org')
+                ]
             ],
         );
     }
 
-    /**
-     * Get the attachments for the message.
-     *
-     * @return array<int, \Illuminate\Mail\Mailables\Attachment>
-     */
     public function attachments(): array
     {
         return [];
