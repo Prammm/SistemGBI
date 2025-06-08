@@ -133,7 +133,7 @@
         @if(!empty($systemReports))
             <div class="report-sections">
                 <h4 class="section-title">
-                    <i class="fas fa-chart-bar me-2"></i>Laporan Sistem
+                    <i class="fas fa-chart-bar me-2"></i>Laporan General
                 </h4>
                 <div class="row">
                     @foreach($systemReports as $key => $report)

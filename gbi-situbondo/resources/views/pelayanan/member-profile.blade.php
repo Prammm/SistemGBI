@@ -102,7 +102,7 @@
                     <div class="mb-0">
                         <div class="d-flex justify-content-between">
                             <span>Tingkat Ketersediaan</span>
-                            <strong>{{ $availabilityPercentage }}%</strong>
+                            <strong>{{ round($availabilityPercentage) }}%</strong>
                         </div>
                         <div class="progress" style="height: 5px;">
                             <div class="progress-bar bg-info" style="width: {{ $availabilityPercentage }}%"></div>

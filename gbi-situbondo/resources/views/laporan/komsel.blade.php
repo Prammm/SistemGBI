@@ -99,40 +99,6 @@
         <li class="breadcrumb-item active">Komsel</li>
     </ol>
 
-    <div class="row">
-        <div class="col-12">
-            <div class="card filter-card">
-                <div class="card-header">
-                    <i class="fas fa-filter me-1"></i>
-                    Filter Laporan
-                </div>
-                <div class="card-body">
-                    <form method="GET" action="{{ route('laporan.komsel') }}" class="row g-3">
-                        <div class="col-md-4">
-                            <label for="bulan" class="form-label">Bulan</label>
-                            <select id="bulan" name="bulan" class="form-select">
-                                @foreach($bulanList as $key => $nama)
-                                    <option value="{{ $key }}" {{ $bulan == $key ? 'selected' : '' }}>{{ $nama }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-                        <div class="col-md-4">
-                            <label for="tahun" class="form-label">Tahun</label>
-                            <select id="tahun" name="tahun" class="form-select">
-                                @foreach($tahunList as $t)
-                                    <option value="{{ $t }}" {{ $tahun == $t ? 'selected' : '' }}>{{ $t }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-                        <div class="col-md-4 d-flex align-items-end">
-                            <button type="submit" class="btn btn-primary me-2">Terapkan Filter</button>
-                            <a href="{{ route('laporan.komsel') }}" class="btn btn-secondary">Reset</a>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        </div>
-    </div>
 
     <div class="row">
         <div class="col-xl-3 col-md-6">

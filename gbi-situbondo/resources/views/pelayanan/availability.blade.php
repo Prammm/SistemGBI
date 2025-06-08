@@ -77,9 +77,6 @@
                 </div>
                 <div class="card-body">
                     <div class="d-grid gap-2">
-                        <button type="button" class="btn btn-outline-primary btn-sm" id="copy-from-template">
-                            <i class="fas fa-copy"></i> Copy dari Template
-                        </button>
                         <button type="button" class="btn btn-outline-success btn-sm" id="set-full-availability">
                             <i class="fas fa-calendar-check"></i> Set Full Available
                         </button>

@@ -133,11 +133,6 @@
                 <a href="{{ route('pelayanan.members.export') }}?{{ http_build_query(request()->all()) }}" class="btn btn-success btn-sm">
                     <i class="fas fa-download"></i> Export Excel
                 </a>
-                @if(Auth::user()->id_role <= 2)
-                    <a href="{{ route('pelayanan.setup-sample') }}" class="btn btn-primary btn-sm">
-                        <i class="fas fa-database"></i> Setup Sample Data
-                    </a>
-                @endif
             </div>
         </div>
         <div class="card-body">

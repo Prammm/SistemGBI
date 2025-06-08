@@ -408,7 +408,7 @@
                 <div class="stats-label">Total Kehadiran</div>
                 <div class="stats-number">{{ $totalKehadiran }}</div>
                 <div class="stats-description">
-                    Dalam {{ $startDate->diffInMonths($endDate) }} bulan terakhir
+                    Dalam {{ round($startDate->floatDiffInMonths($endDate)) }} bulan terakhir
                 </div>
             </div>
         </div>
@@ -496,7 +496,7 @@
             <div class="no-data-message">
                 <i class="fas fa-calendar-times"></i>
                 <h5>Belum Ada Data Kehadiran</h5>
-                <p>{{ $canSelectUser && $selectedUserId ? $anggota->nama : 'Anda' }} belum memiliki catatan kehadiran dalam {{ $startDate->diffInMonths($endDate) }} bulan terakhir.</p>
+                <p>{{ $canSelectUser && $selectedUserId ? $anggota->nama : 'Anda' }} belum memiliki catatan kehadiran Dalam {{ round($startDate->floatDiffInMonths($endDate)) }} bulan terakhir.</p>
                 @if(!$canSelectUser || !$selectedUserId)
                     <a href="{{ route('kehadiran.index') }}" class="btn btn-primary">
                         <i class="fas fa-qrcode me-2"></i>Mulai Presensi

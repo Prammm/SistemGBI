@@ -83,8 +83,8 @@
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
-                            <div class="small">Keluarga & Komsel</div>
-                            <div class="fs-4 fw-bold">{{ $data['total_keluarga'] }} / {{ $data['total_komsel'] }}</div>
+                            <div class="small">Keluarga</div>
+                            <div class="fs-4 fw-bold">{{ $data['total_keluarga'] }}</div>
                         </div>
                         <div class="fs-1 opacity-50"><i class="fas fa-home"></i></div>
                     </div>

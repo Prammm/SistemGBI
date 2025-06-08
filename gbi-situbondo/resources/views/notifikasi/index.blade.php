@@ -97,12 +97,6 @@
     <div class="row mb-4">
         <div class="col-xl-3 col-md-6">
             <div class="stats-card text-center">
-                <div class="h2 mb-0">{{ $stats['total'] }}</div>
-                <div class="small">Total Notifikasi</div>
-            </div>
-        </div>
-        <div class="col-xl-3 col-md-6">
-            <div class="stats-card text-center">
                 <div class="h2 mb-0 text-warning">{{ $stats['high_priority'] }}</div>
                 <div class="small">Prioritas Tinggi</div>
             </div>
@@ -200,34 +194,6 @@
         </div>
         
         @if(Auth::user()->id_role == 1)
-        <div class="row mt-3">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header">
-                        <i class="fas fa-flask me-2"></i>Test Email System
-                    </div>
-                    <div class="card-body">
-                        <form method="POST" action="{{ route('notifikasi.test-email') }}" class="d-inline">
-                            @csrf
-                            <input type="hidden" name="type" value="pelayanan">
-                            <button type="submit" class="btn btn-outline-primary btn-sm me-2">
-                                <i class="fas fa-vial"></i> Test Pelayanan
-                            </button>
-                        </form>
-                        
-                        <form method="POST" action="{{ route('notifikasi.test-email') }}" class="d-inline">
-                            @csrf
-                            <input type="hidden" name="type" value="absence">
-                            <button type="submit" class="btn btn-outline-warning btn-sm">
-                                <i class="fas fa-vial"></i> Test Absensi
-                            </button>
-                        </form>
-                        
-                        <small class="text-muted d-block mt-2">Test email akan dijalankan dalam mode dry-run (tidak mengirim email sebenarnya).</small>
-                    </div>
-                </div>
-            </div>
-        </div>
         @endif
     </div>
     @endif

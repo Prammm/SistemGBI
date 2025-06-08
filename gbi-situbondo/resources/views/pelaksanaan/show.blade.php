@@ -128,11 +128,6 @@
                         <i class="fas fa-arrow-left"></i> Kembali
                     </a>
                     
-                    @if($pelaksanaan->is_recurring && $pelaksanaan->children()->count() > 0)
-                        <a href="{{ route('pelaksanaan.series', $pelaksanaan->id_pelaksanaan) }}" class="btn btn-info">
-                            <i class="fas fa-list"></i> Lihat Semua Jadwal
-                        </a>
-                    @endif
                 </div>
             </div>
             

@@ -131,9 +131,6 @@
                 <a href="{{ route('pelayanan.history.export', array_merge(['format' => 'pdf'], request()->all())) }}" class="btn btn-danger btn-sm">
                     <i class="fas fa-file-pdf"></i> PDF
                 </a>
-                <button type="button" class="btn btn-info btn-sm" onclick="generateReport()">
-                    <i class="fas fa-chart-bar"></i> Generate Report
-                </button>
             </div>
         </div>
     </div>
@@ -505,12 +502,7 @@
             window.location.href = `/pelayanan/create?duplicate=${jadwalId}`;
         }
     }
-    
-    function generateReport() {
-        const params = new URLSearchParams(window.location.search);
-        const url = `/pelayanan/history/report?${params.toString()}`;
-        window.open(url, '_blank');
-    }
+
     
     // Auto-submit form when filters change
     document.querySelectorAll('#filter-form select, #filter-form input[type="date"]').forEach(element => {

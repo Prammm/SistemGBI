@@ -94,28 +94,14 @@
                                     <i class="fas fa-users"></i> Anggota Pelayanan
                                 </a>
                                 @if(Auth::user()->id_role <= 2)
-                                    <a href="{{ route('pelayanan.analytics') }}" class="btn btn-outline-warning btn-sm">
-                                        <i class="fas fa-chart-bar"></i> Analytics
-                                    </a>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="sendNotifications()">
+                                        <i class="fas fa-bell"></i> Kirim Notifikasi
+                                    </button>
                                 @endif
                             </div>
                         </div>
                         @endif
                         
-                        <!-- Reports & Export -->
-                        @if(Auth::user()->id_role <= 2)
-                        <div class="col-md-3">
-                            <h6 class="text-warning">Reports & Export</h6>
-                            <div class="d-grid gap-2">
-                                <a href="{{ route('pelayanan.export') }}?format=excel" class="btn btn-outline-warning btn-sm">
-                                    <i class="fas fa-file-excel"></i> Export Excel
-                                </a>
-                                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="sendNotifications()">
-                                    <i class="fas fa-bell"></i> Kirim Notifikasi
-                                </button>
-                            </div>
-                        </div>
-                        @endif
                         
                         <!-- Current Status -->
                         <div class="col-md-3">
@@ -270,9 +256,6 @@
                                                     <a href="{{ route('pelayanan.create') }}?id_pelaksanaan={{ $idPelaksanaan }}" class="btn btn-outline-primary btn-sm">
                                                         <i class="fas fa-edit"></i> Edit Tim
                                                     </a>
-                                                    <button type="button" class="btn btn-outline-success btn-sm" onclick="copySchedule({{ $idPelaksanaan }})">
-                                                        <i class="fas fa-copy"></i> Copy
-                                                    </button>
                                                 </div>
                                             @endif
                                         </div>

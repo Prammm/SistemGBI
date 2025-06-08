@@ -418,7 +418,7 @@
                 <div class="stats-label">Total Pelayanan</div>
                 <div class="stats-number">{{ $totalPelayanan }}</div>
                 <div class="stats-description">
-                    Dalam {{ $startDate->diffInMonths($endDate) }} bulan terakhir
+                    Dalam {{ round($startDate->floatDiffInMonths($endDate)) }} bulan terakhir
                 </div>
             </div>
         </div>
@@ -511,7 +511,7 @@
             <div class="no-data-message">
                 <i class="fas fa-hand-holding-heart"></i>
                 <h5>Belum Ada Riwayat Pelayanan</h5>
-                <p>{{ $canSelectUser && $selectedUserId ? $anggota->nama : 'Anda' }} belum memiliki riwayat pelayanan dalam {{ $startDate->diffInMonths($endDate) }} bulan terakhir.</p>
+                <p>{{ $canSelectUser && $selectedUserId ? $anggota->nama : 'Anda' }} belum memiliki riwayat pelayanan Dalam {{ round($startDate->floatDiffInMonths($endDate)) }} bulan terakhir.</p>
                 @if(!$canSelectUser || !$selectedUserId)
                     <a href="{{ route('pelayanan.index') }}" class="btn btn-success">
                         <i class="fas fa-plus me-2"></i>Lihat Jadwal Pelayanan

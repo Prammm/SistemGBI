@@ -207,20 +207,7 @@
     </div>
 
     <div class="row">
-        <div class="col-xl-8">
-            <div class="card mb-4">
-                <div class="card-header">
-                    <i class="fas fa-sitemap me-1"></i>
-                    Struktur Organisasi Gereja
-                </div>
-                <div class="card-body">
-                    <div class="chart-container">
-                        <canvas id="orgChart"></canvas>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-xl-4">
+        <div class="col-xl-4>
             <div class="card mb-4">
                 <div class="card-header">
                     <i class="fas fa-birthday-cake me-1"></i>
