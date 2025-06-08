@@ -9,8 +9,10 @@ use App\Models\JadwalPelayanan;
 use App\Models\PelaksanaanKegiatan;
 use App\Models\AnggotaSpesialisasi;
 use App\Models\SchedulingHistory;
+use App\Models\JadwalPelayananReplacement;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -223,10 +225,70 @@ class PelayananController extends Controller
                 ->withInput();
         }
     }
-    
+
+    public function history(Request $request)
+    {
+        $user = Auth::user();
+        
+        // Base query
+        $query = JadwalPelayanan::with(['anggota', 'pelaksanaan.kegiatan', 'kegiatan'])
+            ->whereHas('pelaksanaan', function($q) {
+                $q->where('tanggal_kegiatan', '<', Carbon::now()->format('Y-m-d'));
+            })
+            ->orderBy('tanggal_pelayanan', 'desc');
+        
+        // Role-based filtering
+        if ($user->id_role > 3 && $user->id_anggota) {
+            $query->where('id_anggota', $user->id_anggota);
+        }
+        
+        // Apply filters
+        if ($request->filled('start_date')) {
+            $query->where('tanggal_pelayanan', '>=', $request->start_date);
+        }
+        
+        if ($request->filled('end_date')) {
+            $query->where('tanggal_pelayanan', '<=', $request->end_date);
+        }
+        
+        if ($request->filled('posisi')) {
+            $query->where('posisi', $request->posisi);
+        }
+        
+        if ($request->filled('status')) {
+            $query->where('status_konfirmasi', $request->status);
+        }
+        
+        $historyData = $query->paginate(50);
+        
+        // Get available positions for filter
+        $availablePositions = JadwalPelayanan::distinct('posisi')
+            ->pluck('posisi')
+            ->sort()
+            ->values();
+        
+        // Calculate statistics
+        $statistics = [
+            'accepted' => $query->clone()->where('status_konfirmasi', 'terima')->count(),
+            'rejected' => $query->clone()->where('status_konfirmasi', 'tolak')->count(),
+            'pending' => $query->clone()->where('status_konfirmasi', 'belum')->count(),
+        ];
+        
+        // Chart data
+        $chartData = $this->getHistoryChartData($query->clone());
+        
+        return view('pelayanan.history', compact(
+            'historyData',
+            'availablePositions', 
+            'statistics',
+            'chartData'
+        ));
+    }    
+
+
     public function konfirmasi($id, $status)
     {
-        $jadwal = JadwalPelayanan::findOrFail($id);
+        $jadwal = JadwalPelayanan::with(['anggota', 'pelaksanaan.kegiatan'])->findOrFail($id);
         
         $user = Auth::user();
         if ($user->id_role > 3 && (!$user->id_anggota || $user->id_anggota != $jadwal->id_anggota)) {
@@ -239,13 +301,395 @@ class PelayananController extends Controller
                 ->with('error', 'Status konfirmasi tidak valid.');
         }
         
-        $jadwal->status_konfirmasi = $status;
-        $jadwal->save();
+        DB::beginTransaction();
         
-        return redirect()->route('pelayanan.index')
-            ->with('success', 'Konfirmasi jadwal pelayanan berhasil disimpan.');
+        try {
+            $jadwal->status_konfirmasi = $status;
+            $jadwal->save();
+            
+            // If rejected, trigger auto-replacement system
+            if ($status === 'tolak') {
+                $replacement = JadwalPelayananReplacement::createRequest(
+                    $jadwal->id_pelayanan,
+                    $jadwal->id_anggota,
+                    'tolak',
+                    $user->id,
+                    'Anggota menolak jadwal pelayanan'
+                );
+                
+                // Auto-find replacement if user is Petugas+ level
+                if ($user->id_role <= 3) {
+                    $this->autoFindReplacement($replacement);
+                }
+                
+                // Send notification to relevant personnel
+                $this->sendReplacementNotification($replacement);
+            }
+            
+            DB::commit();
+            
+            $message = $status === 'terima' 
+                ? 'Jadwal pelayanan berhasil diterima.' 
+                : 'Jadwal pelayanan ditolak. Tim akan mencari pengganti.';
+                
+            return redirect()->route('pelayanan.index')->with('success', $message);
+            
+        } catch (\Exception $e) {
+            DB::rollback();
+            Log::error('Error confirming schedule: ' . $e->getMessage());
+            
+            return redirect()->route('pelayanan.index')
+                ->with('error', 'Terjadi kesalahan saat mengkonfirmasi jadwal.');
+        }
+    }
+
+    private function autoFindReplacement($replacement)
+    {
+        $candidates = $replacement->findReplacementCandidates();
+        
+        if ($candidates->isNotEmpty()) {
+            // Auto-assign the best candidate for high-level users
+            $bestCandidate = $candidates->first();
+            
+            if ($bestCandidate['category'] === 'same_position' && $bestCandidate['score'] > 70) {
+                $replacement->assignReplacement(
+                    $bestCandidate['anggota']->id_anggota,
+                    'Auto-assigned: Best available candidate'
+                );
+                
+                // Send notification to the new assignee
+                $this->sendAssignmentNotification($replacement);
+            }
+        } else {
+            $replacement->markNoReplacement('No suitable candidates available');
+        }
     }
     
+    private function sendReplacementNotification($replacement)
+    {
+        // Implementation for sending notifications
+        // This can be expanded to send emails, in-app notifications, etc.
+        Log::info('Replacement needed for schedule: ' . $replacement->id_jadwal_pelayanan);
+    }
+
+    private function sendAssignmentNotification($replacement)
+    {
+        if ($replacement->replacement && $replacement->replacement->email) {
+            try {
+                // Send email notification about new assignment
+                // Mail::to($replacement->replacement->email)
+                //     ->send(new PelayananReminder($replacement->jadwalPelayanan));
+                    
+                Log::info('Assignment notification sent to: ' . $replacement->replacement->email);
+            } catch (\Exception $e) {
+                Log::error('Failed to send assignment notification: ' . $e->getMessage());
+            }
+        }
+    }
+
+    public function getReplacementCandidates($replacementId)
+    {
+        try {
+            $replacement = JadwalPelayananReplacement::findOrFail($replacementId);
+            $candidates = $replacement->findReplacementCandidates();
+            
+            return response()->json([
+                'success' => true,
+                'candidates' => $candidates->values()
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error getting replacement candidates: ' . $e->getMessage());
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to find candidates'
+            ], 500);
+        }
+    }
+
+    public function getScheduleReplacementCandidates($jadwalId)
+    {
+        try {
+            $jadwal = JadwalPelayanan::with(['pelaksanaan', 'anggota'])->findOrFail($jadwalId);
+            
+            // Create temporary replacement to use the candidate finding logic
+            $tempReplacement = new JadwalPelayananReplacement([
+                'id_jadwal_pelayanan' => $jadwal->id_pelayanan,
+                'original_assignee_id' => $jadwal->id_anggota,
+                'replacement_reason' => 'manual_change'
+            ]);
+            
+            $candidates = $tempReplacement->findReplacementCandidates();
+            
+            return response()->json([
+                'success' => true,
+                'candidates' => $candidates->values()
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error getting schedule replacement candidates: ' . $e->getMessage());
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to find candidates'
+            ], 500);
+        }
+    }
+
+    public function assignReplacement(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'replacement_id' => 'nullable|exists:jadwal_pelayanan_replacements,id',
+                'jadwal_id' => 'nullable|exists:jadwal_pelayanan,id_pelayanan',
+                'candidate_id' => 'required|exists:anggota,id_anggota',
+                'notes' => 'nullable|string'
+            ]);
+            
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid input data'
+                ], 400);
+            }
+            
+            DB::beginTransaction();
+            
+            if ($request->replacement_id) {
+                // Existing replacement request
+                $replacement = JadwalPelayananReplacement::findOrFail($request->replacement_id);
+                $replacement->assignReplacement($request->candidate_id, $request->notes);
+            } else {
+                // Direct schedule change
+                $jadwal = JadwalPelayanan::findOrFail($request->jadwal_id);
+                
+                // Create replacement record for tracking
+                $replacement = JadwalPelayananReplacement::createRequest(
+                    $jadwal->id_pelayanan,
+                    $jadwal->id_anggota,
+                    'manual_change',
+                    Auth::id(),
+                    $request->notes
+                );
+                
+                $replacement->assignReplacement($request->candidate_id, $request->notes);
+            }
+            
+            // Send notification to new assignee
+            $this->sendAssignmentNotification($replacement);
+            
+            DB::commit();
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Replacement assigned successfully'
+            ]);
+            
+        } catch (\Exception $e) {
+            DB::rollback();
+            Log::error('Error assigning replacement: ' . $e->getMessage());
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to assign replacement'
+            ], 500);
+        }
+    }
+
+    public function markNoReplacement(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'replacement_id' => 'nullable|exists:jadwal_pelayanan_replacements,id',
+                'jadwal_id' => 'nullable|exists:jadwal_pelayanan,id_pelayanan',
+                'notes' => 'required|string'
+            ]);
+            
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid input data'
+                ], 400);
+            }
+            
+            if ($request->replacement_id) {
+                $replacement = JadwalPelayananReplacement::findOrFail($request->replacement_id);
+                $replacement->markNoReplacement($request->notes);
+            } else {
+                // Create replacement record for tracking
+                $jadwal = JadwalPelayanan::findOrFail($request->jadwal_id);
+                
+                $replacement = JadwalPelayananReplacement::createRequest(
+                    $jadwal->id_pelayanan,
+                    $jadwal->id_anggota,
+                    'no_replacement',
+                    Auth::id(),
+                    $request->notes
+                );
+                
+                $replacement->markNoReplacement($request->notes);
+            }
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Status updated successfully'
+            ]);
+            
+        } catch (\Exception $e) {
+            Log::error('Error marking no replacement: ' . $e->getMessage());
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update status'
+            ], 500);
+        }
+    }
+
+    public function getScheduleDetails($jadwalId)
+    {
+        try {
+            $jadwal = JadwalPelayanan::with(['anggota', 'pelaksanaan.kegiatan', 'kegiatan'])
+                ->findOrFail($jadwalId);
+            
+            $replacement = JadwalPelayananReplacement::where('id_jadwal_pelayanan', $jadwalId)
+                ->with(['replacement'])
+                ->first();
+            
+            $scheduleData = [
+                'kegiatan' => $jadwal->pelaksanaan->kegiatan->nama_kegiatan ?? $jadwal->kegiatan->nama_kegiatan ?? 'N/A',
+                'tanggal' => Carbon::parse($jadwal->tanggal_pelayanan)->format('d F Y'),
+                'waktu' => $jadwal->pelaksanaan ? 
+                    Carbon::parse($jadwal->pelaksanaan->jam_mulai)->format('H:i') . ' - ' . 
+                    Carbon::parse($jadwal->pelaksanaan->jam_selesai)->format('H:i') : 'N/A',
+                'lokasi' => $jadwal->pelaksanaan->lokasi ?? null,
+                'anggota' => $jadwal->anggota->nama,
+                'posisi' => $jadwal->posisi,
+                'status_badge' => $this->getStatusBadge($jadwal->status_konfirmasi),
+                'reguler_badge' => $jadwal->is_reguler || $jadwal->anggota->isRegularIn($jadwal->posisi) ? 
+                    '<span class="badge bg-success"><i class="fas fa-star"></i> Reguler</span>' : 
+                    '<span class="badge bg-light text-dark">Non-Reguler</span>',
+                'created_at' => $jadwal->created_at->format('d/m/Y H:i'),
+                'updated_at' => $jadwal->updated_at->format('d/m/Y H:i')
+            ];
+            
+            $replacementData = null;
+            if ($replacement) {
+                $replacementData = [
+                    'reason' => ucfirst($replacement->replacement_reason),
+                    'status' => ucfirst($replacement->replacement_status),
+                    'replacement_name' => $replacement->replacement ? $replacement->replacement->nama : null,
+                    'requested_at' => $replacement->requested_at->format('d/m/Y H:i'),
+                    'notes' => $replacement->notes
+                ];
+            }
+            
+            return response()->json([
+                'success' => true,
+                'schedule' => $scheduleData,
+                'replacement' => $replacementData
+            ]);
+            
+        } catch (\Exception $e) {
+            Log::error('Error getting schedule details: ' . $e->getMessage());
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to get schedule details'
+            ], 500);
+        }
+    }
+
+    public function exportHistory(Request $request)
+    {
+        $format = $request->get('format', 'excel');
+        
+        // Apply same filters as history method
+        $query = JadwalPelayanan::with(['anggota', 'pelaksanaan.kegiatan', 'kegiatan'])
+            ->whereHas('pelaksanaan', function($q) {
+                $q->where('tanggal_kegiatan', '<', Carbon::now()->format('Y-m-d'));
+            })
+            ->orderBy('tanggal_pelayanan', 'desc');
+        
+        // Apply filters
+        if ($request->filled('start_date')) {
+            $query->where('tanggal_pelayanan', '>=', $request->start_date);
+        }
+        
+        if ($request->filled('end_date')) {
+            $query->where('tanggal_pelayanan', '<=', $request->end_date);
+        }
+        
+        if ($request->filled('posisi')) {
+            $query->where('posisi', $request->posisi);
+        }
+        
+        if ($request->filled('status')) {
+            $query->where('status_konfirmasi', $request->status);
+        }
+        
+        $data = $query->get();
+        
+        switch ($format) {
+            case 'pdf':
+                return $this->exportHistoryToPdf($data, $request);
+            case 'excel':
+                return $this->exportHistoryToExcel($data, $request);
+            default:
+                return $this->exportHistoryToExcel($data, $request);
+        }
+    }
+
+    private function getHistoryChartData($query)
+    {
+        $monthlyData = $query->selectRaw('
+                DATE_FORMAT(tanggal_pelayanan, "%Y-%m") as month,
+                COUNT(*) as total,
+                SUM(CASE WHEN status_konfirmasi = "terima" THEN 1 ELSE 0 END) as accepted,
+                SUM(CASE WHEN status_konfirmasi = "tolak" THEN 1 ELSE 0 END) as rejected,
+                SUM(CASE WHEN status_konfirmasi = "belum" THEN 1 ELSE 0 END) as pending
+            ')
+            ->groupBy('month')
+            ->orderBy('month')
+            ->get();
+        
+        $statusData = $query->selectRaw('
+                SUM(CASE WHEN status_konfirmasi = "terima" THEN 1 ELSE 0 END) as accepted,
+                SUM(CASE WHEN status_konfirmasi = "tolak" THEN 1 ELSE 0 END) as rejected,
+                SUM(CASE WHEN status_konfirmasi = "belum" THEN 1 ELSE 0 END) as pending
+            ')
+            ->first();
+        
+        return [
+            'monthly' => [
+                'labels' => $monthlyData->pluck('month')->map(function($month) {
+                    return Carbon::createFromFormat('Y-m', $month)->format('M Y');
+                }),
+                'total' => $monthlyData->pluck('total'),
+                'accepted' => $monthlyData->pluck('accepted'),
+                'rejected' => $monthlyData->pluck('rejected'),
+                'pending' => $monthlyData->pluck('pending')
+            ],
+            'status' => [
+                'accepted' => $statusData->accepted ?? 0,
+                'rejected' => $statusData->rejected ?? 0,
+                'pending' => $statusData->pending ?? 0
+            ]
+        ];
+    }
+
+    private function getStatusBadge($status)
+    {
+        switch ($status) {
+            case 'terima':
+                return '<span class="badge bg-success">Diterima</span>';
+            case 'tolak':
+                return '<span class="badge bg-danger">Ditolak</span>';
+            case 'belum':
+                return '<span class="badge bg-warning">Belum Konfirmasi</span>';
+            default:
+                return '<span class="badge bg-secondary">Unknown</span>';
+        }
+    }
+
     public function destroy($id)
     {
         if (Auth::user()->id_role > 3) {

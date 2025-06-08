@@ -62,11 +62,63 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/store', [PelayananController::class, 'store'])->name('store');
         Route::get('/konfirmasi/{id}/{status}', [PelayananController::class, 'konfirmasi'])->name('konfirmasi');
         Route::delete('/{id}', [PelayananController::class, 'destroy'])->name('destroy');
+
+        // History & Analytics
+        Route::get('/history', [PelayananController::class, 'history'])->name('history');
+        Route::get('/history/export', [PelayananController::class, 'exportHistory'])->name('history.export');
+        Route::get('/history/report', [PelayananController::class, 'generateHistoryReport'])->name('history.report');
+        
+        // Auto-replacement API endpoints
+        Route::get('/api/replacement-candidates/{replacement_id}', [PelayananController::class, 'getReplacementCandidates'])
+            ->name('api.replacement-candidates');
+        Route::get('/api/schedule-replacement-candidates/{jadwal_id}', [PelayananController::class, 'getScheduleReplacementCandidates'])
+            ->name('api.schedule-replacement-candidates');
+        Route::post('/api/assign-replacement', [PelayananController::class, 'assignReplacement'])
+            ->name('api.assign-replacement');
+        Route::post('/api/mark-no-replacement', [PelayananController::class, 'markNoReplacement'])
+            ->name('api.mark-no-replacement');
+        
+        // Schedule details API
+        Route::get('/api/schedule-details/{jadwal_id}', [PelayananController::class, 'getScheduleDetails'])
+            ->name('api.schedule-details');
         
         // Advanced Generator
         Route::get('/generator', [PelayananController::class, 'showGenerator'])->name('generator');
         Route::post('/generate', [PelayananController::class, 'generateSchedule'])->name('generate');
-        Route::post('/bulk-generate', [PelayananController::class, 'bulkGenerate'])->name('bulk-generate');
+        Route::get('/api/recurring-events', function() {
+            $recurringEvents = \App\Models\PelaksanaanKegiatan::with('kegiatan')
+                ->where('is_recurring', true)
+                ->whereNull('parent_id') // Only parent events
+                ->whereHas('kegiatan', function($q) {
+                    $q->where('tipe_kegiatan', 'ibadah'); // Focus on ibadah only
+                })
+                ->where('tanggal_kegiatan', '>=', now()->format('Y-m-d'))
+                ->orderBy('tanggal_kegiatan')
+                ->get()
+                ->map(function($event) {
+                    return [
+                        'id' => $event->id_pelaksanaan,
+                        'name' => $event->kegiatan->nama_kegiatan,
+                        'schedule' => $event->recurring_type === 'weekly' ? 'Mingguan' : 'Bulanan',
+                        'day' => $event->recurring_day,
+                        'time' => \Carbon\Carbon::parse($event->jam_mulai)->format('H:i') . ' - ' . 
+                                 \Carbon\Carbon::parse($event->jam_selesai)->format('H:i'),
+                        'end_date' => $event->recurring_end_date ? 
+                                     \Carbon\Carbon::parse($event->recurring_end_date)->format('d/m/Y') : null,
+                        'location' => $event->lokasi
+                    ];
+                });
+                
+            return response()->json(['events' => $recurringEvents]);
+        })->name('api.recurring-events');
+        
+        // Replacement management dashboard
+        Route::get('/replacements', [PelayananController::class, 'replacementDashboard'])
+            ->name('replacements')
+            ->middleware('permission:edit_pelayanan');
+        Route::post('/replacements/{id}/resolve', [PelayananController::class, 'resolveReplacement'])
+            ->name('replacements.resolve')
+            ->middleware('permission:edit_pelayanan');
         
         // Availability Management
         Route::get('/availability/{id?}', [PelayananController::class, 'editAvailability'])->name('availability');

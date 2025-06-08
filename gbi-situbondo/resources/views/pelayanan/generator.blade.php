@@ -117,7 +117,7 @@
                                         <h5>Pengaturan Bulanan</h5>
                                     </div>
                                     <div class="card-body">
-                                        <div class="row">
+                                        <div class="row mb-3">
                                             <div class="col-md-6">
                                                 <div class="form-group mb-3">
                                                     <label class="form-label">Bulan/Tahun:</label>
@@ -128,6 +128,35 @@
                                                 <div class="form-group mb-3">
                                                     <label class="form-label">Max Pelayanan per Bulan:</label>
                                                     <input type="number" class="form-control" name="max_services_per_month" value="3" min="1" max="10">
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- NEW: Recurring Events Selection -->
+                                        <div class="mb-3">
+                                            <label class="form-label">Pilih Kegiatan Recurring:</label>
+                                            <div class="form-text text-muted mb-2">
+                                                Pilih kegiatan ibadah recurring yang ingin di-generate jadwalnya untuk bulan tersebut.
+                                            </div>
+                                            
+                                            <div id="recurring-events-container">
+                                                <div class="text-center py-3">
+                                                    <div class="spinner-border spinner-border-sm" role="status">
+                                                        <span class="visually-hidden">Loading...</span>
+                                                    </div>
+                                                    <span class="ms-2">Memuat kegiatan recurring...</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Monthly Generation Options -->
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="checkbox" id="skip_existing" name="skip_existing" value="1" checked>
+                                                    <label class="form-check-label" for="skip_existing">
+                                                        Skip kegiatan yang sudah memiliki jadwal pelayanan
+                                                    </label>
                                                 </div>
                                             </div>
                                         </div>
@@ -377,6 +406,7 @@
         });
         
         // Toggle configuration based on generation type
+
         $('input[name="generation_type"]').change(function() {
             if ($(this).val() === 'single') {
                 $('#single-config').show();
@@ -384,9 +414,122 @@
             } else {
                 $('#single-config').hide();
                 $('#monthly-config').show();
+                loadRecurringEvents(); // Load recurring events when monthly is selected
             }
             updateCounters();
         });
+
+        function loadRecurringEvents() {
+            const container = $('#recurring-events-container');
+            
+            fetch('/pelayanan/api/recurring-events')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.events && data.events.length > 0) {
+                        let html = '<div class="row">';
+                        
+                        data.events.forEach(event => {
+                            const dayNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+                            const dayName = dayNames[event.day] || 'N/A';
+                            
+                            html += `
+                                <div class="col-md-6 mb-3">
+                                    <div class="card recurring-event-card" data-event-id="${event.id}">
+                                        <div class="card-body p-3">
+                                            <div class="form-check">
+                                                <input class="form-check-input recurring-event-checkbox" 
+                                                    type="checkbox" 
+                                                    id="recurring_${event.id}" 
+                                                    name="recurring_events[]" 
+                                                    value="${event.id}"
+                                                    checked>
+                                                <label class="form-check-label w-100" for="recurring_${event.id}">
+                                                    <div class="d-flex justify-content-between align-items-start">
+                                                        <div>
+                                                            <strong>${event.name}</strong>
+                                                            <br><small class="text-muted">
+                                                                ${event.schedule} • ${dayName} • ${event.time}
+                                                            </small>
+                                                            ${event.location ? `<br><small class="text-info"><i class="fas fa-map-marker-alt"></i> ${event.location}</small>` : ''}
+                                                        </div>
+                                                        <div class="text-end">
+                                                            <span class="badge bg-primary">${event.schedule}</span>
+                                                            ${event.end_date ? `<br><small class="text-muted">Until ${event.end_date}</small>` : ''}
+                                                        </div>
+                                                    </div>
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        });
+                        
+                        html += '</div>';
+                        html += `
+                            <div class="mt-3">
+                                <button type="button" class="btn btn-sm btn-outline-secondary" id="select-all-recurring">Pilih Semua</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" id="deselect-all-recurring">Batalkan Semua</button>
+                                <button type="button" class="btn btn-sm btn-outline-primary" id="select-weekly-recurring">Hanya Mingguan</button>
+                            </div>
+                        `;
+                        
+                        container.html(html);
+                        
+                        // Add event handlers for recurring events
+                        $('#select-all-recurring').click(function() {
+                            $('.recurring-event-checkbox').prop('checked', true);
+                            updateCounters();
+                        });
+                        
+                        $('#deselect-all-recurring').click(function() {
+                            $('.recurring-event-checkbox').prop('checked', false);
+                            updateCounters();
+                        });
+                        
+                        $('#select-weekly-recurring').click(function() {
+                            $('.recurring-event-checkbox').prop('checked', false);
+                            $('[data-schedule="Mingguan"] .recurring-event-checkbox').prop('checked', true);
+                            updateCounters();
+                        });
+                        
+                        // Visual feedback for card selection
+                        $('.recurring-event-checkbox').change(function() {
+                            const card = $(this).closest('.recurring-event-card');
+                            if ($(this).is(':checked')) {
+                                card.addClass('border-primary bg-light');
+                            } else {
+                                card.removeClass('border-primary bg-light');
+                            }
+                            updateCounters();
+                        });
+                        
+                        // Initialize visual state
+                        $('.recurring-event-checkbox:checked').each(function() {
+                            $(this).closest('.recurring-event-card').addClass('border-primary bg-light');
+                        });
+                        
+                    } else {
+                        container.html(`
+                            <div class="alert alert-warning">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                Tidak ditemukan kegiatan ibadah recurring yang aktif.
+                                <br><small>Pastikan sudah ada kegiatan ibadah dengan pengaturan recurring di sistem.</small>
+                            </div>
+                        `);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading recurring events:', error);
+                    container.html(`
+                        <div class="alert alert-danger">
+                            <i class="fas fa-exclamation-circle"></i>
+                            Gagal memuat kegiatan recurring. Silakan refresh halaman.
+                        </div>
+                    `);
+                });
+        }
+        
         
         // Show selected event details
         $('#pelaksanaan-select').change(function() {
@@ -524,7 +667,15 @@
         updateCounters();
         
         function updateCounters() {
-            const eventsCount = $('#pelaksanaan-select').val() ? $('#pelaksanaan-select').val().length : 0;
+            const generationType = $('input[name="generation_type"]:checked').val();
+            
+            let eventsCount = 0;
+            if (generationType === 'single') {
+                eventsCount = $('#pelaksanaan-select').val() ? $('#pelaksanaan-select').val().length : 0;
+            } else {
+                eventsCount = $('.recurring-event-checkbox:checked').length;
+            }
+            
             const positionsCount = $('.position-checkbox:checked').length;
             const anggotaCount = $('.anggota-checkbox:checked').length;
             
@@ -534,20 +685,99 @@
             
             if (positionsCount > 0 && anggotaCount > 0) {
                 const ratio = Math.round((anggotaCount / positionsCount) * 10) / 10;
-                $('#requirement-ratio').text(`${anggotaCount}:${positionsCount} (${ratio}:1)`);
                 
-                if (ratio < 1) {
-                    $('#requirement-ratio').removeClass('bg-warning bg-success').addClass('bg-danger');
-                } else if (ratio < 2) {
-                    $('#requirement-ratio').removeClass('bg-danger bg-success').addClass('bg-warning');
+                // For monthly generation, calculate estimated total assignments
+                if (generationType === 'bulk_monthly' && eventsCount > 0) {
+                    const estimatedAssignments = eventsCount * positionsCount;
+                    $('#requirement-ratio').text(`~${estimatedAssignments} assignments (${anggotaCount}:${positionsCount} per event)`);
+                    
+                    if (ratio < 1.5) {
+                        $('#requirement-ratio').removeClass('bg-warning bg-success').addClass('bg-danger');
+                    } else if (ratio < 3) {
+                        $('#requirement-ratio').removeClass('bg-danger bg-success').addClass('bg-warning');
+                    } else {
+                        $('#requirement-ratio').removeClass('bg-danger bg-warning').addClass('bg-success');
+                    }
                 } else {
-                    $('#requirement-ratio').removeClass('bg-danger bg-warning').addClass('bg-success');
+                    $('#requirement-ratio').text(`${anggotaCount}:${positionsCount} (${ratio}:1)`);
+                    
+                    if (ratio < 1) {
+                        $('#requirement-ratio').removeClass('bg-warning bg-success').addClass('bg-danger');
+                    } else if (ratio < 2) {
+                        $('#requirement-ratio').removeClass('bg-danger bg-success').addClass('bg-warning');
+                    } else {
+                        $('#requirement-ratio').removeClass('bg-danger bg-warning').addClass('bg-success');
+                    }
                 }
             } else {
                 $('#requirement-ratio').text('0:0');
             }
         }
         
+        $('#generator-form').submit(function(e) {
+            const generationType = $('input[name="generation_type"]:checked').val();
+            const positionsCount = $('.position-checkbox:checked').length;
+            const anggotaCount = $('.anggota-checkbox:checked').length;
+            
+            // Basic validation
+            if (positionsCount === 0) {
+                e.preventDefault();
+                alert('Harap pilih minimal satu posisi untuk dijadwalkan.');
+                return false;
+            }
+            
+            if (anggotaCount === 0) {
+                e.preventDefault();
+                alert('Harap pilih minimal satu anggota untuk dijadwalkan.');
+                return false;
+            }
+            
+            // Type-specific validation
+            if (generationType === 'single') {
+                const selectedEvents = $('#pelaksanaan-select').val();
+                if (!selectedEvents || selectedEvents.length === 0) {
+                    e.preventDefault();
+                    alert('Harap pilih kegiatan yang akan dijadwalkan.');
+                    return false;
+                }
+            } else if (generationType === 'bulk_monthly') {
+                const selectedRecurring = $('.recurring-event-checkbox:checked').length;
+                const monthYear = $('input[name="month_year"]').val();
+                
+                if (selectedRecurring === 0) {
+                    e.preventDefault();
+                    alert('Harap pilih minimal satu kegiatan recurring untuk generate bulanan.');
+                    return false;
+                }
+                
+                if (!monthYear) {
+                    e.preventDefault();
+                    alert('Harap pilih bulan/tahun untuk generate bulanan.');
+                    return false;
+                }
+                
+                // Confirmation for bulk generation
+                const estimatedAssignments = selectedRecurring * positionsCount;
+                if (estimatedAssignments > 50) {
+                    if (!confirm(`Generate bulanan akan membuat sekitar ${estimatedAssignments} assignment jadwal pelayanan. Yakin melanjutkan?`)) {
+                        e.preventDefault();
+                        return false;
+                    }
+                }
+            }
+            
+            // Ratio warning
+            const ratio = anggotaCount / positionsCount;
+            if (ratio < 1.5) {
+                if (!confirm('Jumlah anggota relatif sedikit dibanding posisi yang dibutuhkan. Beberapa anggota mungkin akan mendapat beban pelayanan lebih berat. Lanjutkan?')) {
+                    e.preventDefault();
+                    return false;
+                }
+            }
+            
+            return true;
+        });
+
         function updateAvailabilityFiltering() {
             // This function will be called when events are selected
             // to highlight members who are available for the selected events

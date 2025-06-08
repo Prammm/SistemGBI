@@ -31,6 +31,19 @@
         </div>
     @endif
     
+    <!-- Pending Replacements Alert -->
+    @php
+        $pendingReplacements = \App\Models\JadwalPelayananReplacement::getPendingReplacements();
+    @endphp
+    @if($pendingReplacements->isNotEmpty() && Auth::user()->id_role <= 3)
+        <div class="alert alert-warning alert-dismissible fade show">
+            <i class="fas fa-exclamation-triangle"></i> 
+            <strong>Perhatian!</strong> Ada {{ $pendingReplacements->count() }} jadwal yang membutuhkan pengganti.
+            <a href="#pending-replacements" class="alert-link">Lihat detail</a>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    @endif
+    
     <!-- Quick Actions Card -->
     <div class="row mb-3">
         <div class="col-md-12">
@@ -151,7 +164,64 @@
         </div>
     </div>
     
-    <!-- Jadwal Pelayanan Mendatang -->
+    <!-- Pending Replacements Section -->
+    @if($pendingReplacements->isNotEmpty() && Auth::user()->id_role <= 3)
+        <div class="card mb-4" id="pending-replacements">
+            <div class="card-header bg-warning text-dark">
+                <i class="fas fa-user-times me-1"></i>
+                Jadwal Membutuhkan Pengganti ({{ $pendingReplacements->count() }})
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Kegiatan</th>
+                                <th>Posisi</th>
+                                <th>Anggota Asli</th>
+                                <th>Alasan</th>
+                                <th>Waktu</th>
+                                <th>Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($pendingReplacements as $replacement)
+                                <tr class="table-warning">
+                                    <td>
+                                        <strong>{{ $replacement->jadwalPelayanan->pelaksanaan->kegiatan->nama_kegiatan ?? 'N/A' }}</strong><br>
+                                        <small class="text-muted">
+                                            {{ \Carbon\Carbon::parse($replacement->jadwalPelayanan->tanggal_pelayanan)->format('d/m/Y') }}
+                                            {{ \Carbon\Carbon::parse($replacement->jadwalPelayanan->pelaksanaan->jam_mulai)->format('H:i') }}
+                                        </small>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-danger">{{ $replacement->jadwalPelayanan->posisi }}</span>
+                                    </td>
+                                    <td>{{ $replacement->originalAssignee->nama }}</td>
+                                    <td>
+                                        <span class="badge bg-secondary">{{ ucfirst($replacement->replacement_reason) }}</span>
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">{{ $replacement->requested_at->diffForHumans() }}</small>
+                                    </td>
+                                    <td>
+                                        <button type="button" class="btn btn-primary btn-sm" 
+                                                onclick="findReplacement({{ $replacement->id }})"
+                                                data-bs-toggle="modal" 
+                                                data-bs-target="#replacementModal">
+                                            <i class="fas fa-search"></i> Cari Pengganti
+                                        </button>
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    @endif
+    
+    <!-- Jadwal Pelayanan Mendatang - GROUPED BY PELAKSANAAN -->
     <div class="card mb-4">
         <div class="card-header">
             <i class="fas fa-calendar-check me-1"></i>
@@ -159,104 +229,175 @@
         </div>
         <div class="card-body">
             @if($jadwalPelayanan->isNotEmpty())
-                @foreach($jadwalPelayanan as $tanggal => $jadwalList)
+                @foreach($jadwalPelayanan as $tanggal => $jadwalPerTanggal)
                     <div class="mb-4">
-                        <h5 class="border-bottom pb-2 d-flex justify-content-between align-items-center">
-                            <span>{{ \Carbon\Carbon::parse($tanggal)->format('l, d F Y') }}</span>
-                            <span class="badge bg-primary">{{ $jadwalList->count() }} posisi</span>
+                        <h5 class="border-bottom pb-2 text-primary">
+                            {{ \Carbon\Carbon::parse($tanggal)->format('l, d F Y') }}
                         </h5>
                         
-                        <div class="table-responsive">
-                            <table class="table table-hover">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>Kegiatan</th>
-                                        <th>Posisi</th>
-                                        <th>Petugas</th>
-                                        <th>Status</th>
-                                        <th>Regular</th>
-                                        <th>Aksi</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach($jadwalList as $jadwal)
-                                        <tr class="{{ $jadwal->status_konfirmasi === 'belum' ? 'table-warning' : ($jadwal->status_konfirmasi === 'terima' ? 'table-success' : 'table-danger') }}">
-                                            <td>
-                                                <strong>{{ $jadwal->pelaksanaan->kegiatan->nama_kegiatan ?? $jadwal->kegiatan->nama_kegiatan ?? 'N/A' }}</strong>
-                                                @if($jadwal->pelaksanaan)
-                                                    <br><small class="text-muted">
-                                                        {{ \Carbon\Carbon::parse($jadwal->pelaksanaan->jam_mulai)->format('H:i') }} - 
-                                                        {{ \Carbon\Carbon::parse($jadwal->pelaksanaan->jam_selesai)->format('H:i') }}
-                                                    </small>
+                        @php
+                            // Group by pelaksanaan within each date
+                            $jadwalGrouped = $jadwalPerTanggal->groupBy('id_pelaksanaan');
+                        @endphp
+                        
+                        @foreach($jadwalGrouped as $idPelaksanaan => $jadwalPerPelaksanaan)
+                            @php
+                                $pelaksanaan = $jadwalPerPelaksanaan->first()->pelaksanaan;
+                                $kegiatan = $pelaksanaan->kegiatan ?? $jadwalPerPelaksanaan->first()->kegiatan;
+                            @endphp
+                            
+                            <div class="card mb-3 border-start border-4 border-primary">
+                                <div class="card-header bg-light">
+                                    <div class="row align-items-center">
+                                        <div class="col-md-8">
+                                            <h6 class="mb-1">
+                                                <i class="fas fa-church text-primary me-2"></i>
+                                                {{ $kegiatan->nama_kegiatan ?? 'N/A' }}
+                                            </h6>
+                                            <div class="text-muted small">
+                                                <i class="fas fa-clock"></i> 
+                                                {{ \Carbon\Carbon::parse($pelaksanaan->jam_mulai ?? '00:00')->format('H:i') }} - 
+                                                {{ \Carbon\Carbon::parse($pelaksanaan->jam_selesai ?? '00:00')->format('H:i') }}
+                                                @if($pelaksanaan->lokasi)
+                                                    | <i class="fas fa-map-marker-alt"></i> {{ $pelaksanaan->lokasi }}
                                                 @endif
-                                            </td>
-                                            <td>
-                                                <span class="badge bg-secondary">{{ $jadwal->posisi }}</span>
-                                            </td>
-                                            <td>
-                                                <a href="{{ route('pelayanan.member-profile', $jadwal->anggota->id_anggota) }}" class="text-decoration-none">
-                                                    {{ $jadwal->anggota->nama }}
-                                                </a>
-                                                @if($jadwal->anggota->no_telepon)
-                                                    <br><small class="text-muted">
-                                                        <i class="fas fa-phone"></i> {{ $jadwal->anggota->no_telepon }}
-                                                    </small>
-                                                @endif
-                                            </td>
-                                            <td>
-                                                @switch($jadwal->status_konfirmasi)
-                                                    @case('belum')
-                                                        <span class="badge bg-warning">Belum Konfirmasi</span>
-                                                        @break
-                                                    @case('terima')
-                                                        <span class="badge bg-success">Diterima</span>
-                                                        @break
-                                                    @case('tolak')
-                                                        <span class="badge bg-danger">Ditolak</span>
-                                                        @break
-                                                    @default
-                                                        <span class="badge bg-secondary">Unknown</span>
-                                                @endswitch
-                                            </td>
-                                            <td>
-                                                @if($jadwal->is_reguler || $jadwal->anggota->isRegularIn($jadwal->posisi))
-                                                    <span class="badge bg-success">
-                                                        <i class="fas fa-star"></i> Reguler
-                                                    </span>
-                                                @else
-                                                    <span class="badge bg-light text-dark">Non-Reguler</span>
-                                                @endif
-                                            </td>
-                                            <td>
-                                                <div class="btn-group btn-group-sm">
-                                                    @if(Auth::user()->id_role <= 3 || (Auth::user()->id_anggota && Auth::user()->id_anggota == $jadwal->id_anggota))
-                                                        @if($jadwal->status_konfirmasi == 'belum')
-                                                            <a href="{{ route('pelayanan.konfirmasi', [$jadwal->id_pelayanan, 'terima']) }}" 
-                                                               class="btn btn-success" title="Terima">
-                                                                <i class="fas fa-check"></i>
-                                                            </a>
-                                                            <a href="{{ route('pelayanan.konfirmasi', [$jadwal->id_pelayanan, 'tolak']) }}" 
-                                                               class="btn btn-danger" title="Tolak">
-                                                                <i class="fas fa-times"></i>
-                                                            </a>
-                                                        @endif
-                                                        
-                                                        @if(Auth::user()->id_role <= 3)
-                                                            <button type="button" class="btn btn-danger" 
-                                                                    onclick="deleteSchedule({{ $jadwal->id_pelayanan }})" title="Hapus">
-                                                                <i class="fas fa-trash"></i>
-                                                            </button>
-                                                        @endif
-                                                    @else
-                                                        <span class="text-muted">-</span>
-                                                    @endif
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4 text-end">
+                                            <span class="badge bg-primary fs-6">{{ $jadwalPerPelaksanaan->count() }} posisi</span>
+                                            @if(Auth::user()->id_role <= 3)
+                                                <div class="btn-group btn-group-sm mt-1">
+                                                    <a href="{{ route('pelayanan.create') }}?id_pelaksanaan={{ $idPelaksanaan }}" class="btn btn-outline-primary btn-sm">
+                                                        <i class="fas fa-edit"></i> Edit Tim
+                                                    </a>
+                                                    <button type="button" class="btn btn-outline-success btn-sm" onclick="copySchedule({{ $idPelaksanaan }})">
+                                                        <i class="fas fa-copy"></i> Copy
+                                                    </button>
                                                 </div>
-                                            </td>
-                                        </tr>
-                                    @endforeach
-                                </tbody>
-                            </table>
-                        </div>
+                                            @endif
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="card-body p-0">
+                                    <div class="table-responsive">
+                                        <table class="table table-hover mb-0">
+                                            <thead class="table-light">
+                                                <tr>
+                                                    <th width="20%">Posisi</th>
+                                                    <th width="30%">Petugas</th>
+                                                    <th width="15%">Status</th>
+                                                    <th width="15%">Regular</th>
+                                                    <th width="20%">Aksi</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach($jadwalPerPelaksanaan as $jadwal)
+                                                    @php
+                                                        $hasReplacement = \App\Models\JadwalPelayananReplacement::where('id_jadwal_pelayanan', $jadwal->id_pelayanan)
+                                                            ->where('replacement_status', 'pending')
+                                                            ->exists();
+                                                        $rowClass = '';
+                                                        if ($jadwal->status_konfirmasi === 'tolak') {
+                                                            $rowClass = Auth::user()->id_role <= 3 ? 'table-danger' : 'table-warning';
+                                                        } elseif ($hasReplacement) {
+                                                            $rowClass = 'table-warning';
+                                                        } elseif ($jadwal->status_konfirmasi === 'belum') {
+                                                            $rowClass = 'table-light';
+                                                        } elseif ($jadwal->status_konfirmasi === 'terima') {
+                                                            $rowClass = 'table-success';
+                                                        }
+                                                    @endphp
+                                                    
+                                                    <tr class="{{ $rowClass }}">
+                                                        <td>
+                                                            <span class="badge bg-secondary">{{ $jadwal->posisi }}</span>
+                                                            @if($hasReplacement)
+                                                                <br><small class="text-warning">
+                                                                    <i class="fas fa-exclamation-triangle"></i> Perlu pengganti
+                                                                </small>
+                                                            @endif
+                                                        </td>
+                                                        <td>
+                                                            <div class="d-flex align-items-center">
+                                                                <div class="avatar-initial rounded-circle bg-primary text-white me-2" style="width: 32px; height: 32px; font-size: 12px; display: flex; align-items: center; justify-content: center;">
+                                                                    {{ strtoupper(substr($jadwal->anggota->nama, 0, 2)) }}
+                                                                </div>
+                                                                <div>
+                                                                    <a href="{{ route('pelayanan.member-profile', $jadwal->anggota->id_anggota) }}" class="text-decoration-none fw-bold">
+                                                                        {{ $jadwal->anggota->nama }}
+                                                                    </a>
+                                                                    @if($jadwal->anggota->no_telepon)
+                                                                        <br><small class="text-muted">
+                                                                            <i class="fas fa-phone"></i> {{ $jadwal->anggota->no_telepon }}
+                                                                        </small>
+                                                                    @endif
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                        <td>
+                                                            @switch($jadwal->status_konfirmasi)
+                                                                @case('belum')
+                                                                    <span class="badge bg-warning">Belum Konfirmasi</span>
+                                                                    @break
+                                                                @case('terima')
+                                                                    <span class="badge bg-success">Diterima</span>
+                                                                    @break
+                                                                @case('tolak')
+                                                                    <span class="badge bg-danger">Ditolak</span>
+                                                                    @if($hasReplacement)
+                                                                        <br><small class="text-warning">Mencari pengganti...</small>
+                                                                    @endif
+                                                                    @break
+                                                                @default
+                                                                    <span class="badge bg-secondary">Unknown</span>
+                                                            @endswitch
+                                                        </td>
+                                                        <td>
+                                                            @if($jadwal->is_reguler || $jadwal->anggota->isRegularIn($jadwal->posisi))
+                                                                <span class="badge bg-success">
+                                                                    <i class="fas fa-star"></i> Reguler
+                                                                </span>
+                                                            @else
+                                                                <span class="badge bg-light text-dark">Non-Reguler</span>
+                                                            @endif
+                                                        </td>
+                                                        <td>
+                                                            <div class="btn-group btn-group-sm">
+                                                                @if(Auth::user()->id_role <= 3 || (Auth::user()->id_anggota && Auth::user()->id_anggota == $jadwal->id_anggota))
+                                                                    @if($jadwal->status_konfirmasi == 'belum')
+                                                                        <button type="button" class="btn btn-success" onclick="confirmSchedule({{ $jadwal->id_pelayanan }}, 'terima')" title="Terima">
+                                                                            <i class="fas fa-check"></i>
+                                                                        </button>
+                                                                        <button type="button" class="btn btn-danger" onclick="confirmSchedule({{ $jadwal->id_pelayanan }}, 'tolak')" title="Tolak">
+                                                                            <i class="fas fa-times"></i>
+                                                                        </button>
+                                                                    @elseif($jadwal->status_konfirmasi == 'tolak' && Auth::user()->id_role <= 3)
+                                                                        <button type="button" class="btn btn-primary btn-sm" onclick="findReplacement(null, {{ $jadwal->id_pelayanan }})" data-bs-toggle="modal" data-bs-target="#replacementModal">
+                                                                            <i class="fas fa-user-plus"></i> Cari Pengganti
+                                                                        </button>
+                                                                    @endif
+                                                                    
+                                                                    @if(Auth::user()->id_role <= 3)
+                                                                        <button type="button" class="btn btn-outline-secondary" onclick="changeAssignee({{ $jadwal->id_pelayanan }})" title="Ganti Petugas">
+                                                                            <i class="fas fa-exchange-alt"></i>
+                                                                        </button>
+                                                                        <button type="button" class="btn btn-danger" onclick="deleteSchedule({{ $jadwal->id_pelayanan }})" title="Hapus">
+                                                                            <i class="fas fa-trash"></i>
+                                                                        </button>
+                                                                    @endif
+                                                                @else
+                                                                    <span class="text-muted">-</span>
+                                                                @endif
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                @endforeach
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        @endforeach
                     </div>
                 @endforeach
             @else
@@ -276,9 +417,14 @@
     
     <!-- Riwayat Pelayanan -->
     <div class="card mb-4">
-        <div class="card-header">
-            <i class="fas fa-history me-1"></i>
-            Riwayat Pelayanan (10 Terakhir)
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <div>
+                <i class="fas fa-history me-1"></i>
+                Riwayat Pelayanan (3 Terakhir)
+            </div>
+            <a href="{{ route('pelayanan.history') }}" class="btn btn-outline-primary btn-sm">
+                <i class="fas fa-list"></i> Lihat Semua Riwayat
+            </a>
         </div>
         <div class="card-body">
             @if($riwayatPelayanan->isNotEmpty())
@@ -328,14 +474,6 @@
                         </div>
                     </div>
                 @endforeach
-                
-                @if($riwayatPelayanan->count() > 3)
-                    <div class="text-center">
-                        <a href="{{ route('pelayanan.member-history', Auth::user()->id_anggota ?? 0) }}" class="btn btn-outline-secondary btn-sm">
-                            <i class="fas fa-list"></i> Lihat Semua Riwayat
-                        </a>
-                    </div>
-                @endif
             @else
                 <div class="text-center py-3">
                     <i class="fas fa-history fa-2x text-muted mb-2"></i>
@@ -346,16 +484,21 @@
     </div>
 </div>
 
-<!-- Modal for Edit Schedule -->
-<div class="modal fade" id="editScheduleModal" tabindex="-1">
-    <div class="modal-dialog">
+<!-- Replacement Modal -->
+<div class="modal fade" id="replacementModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Edit Jadwal Pelayanan</h5>
+                <h5 class="modal-title">Cari Pengganti Pelayan</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body">
-                <!-- Form edit akan dimuat di sini -->
+            <div class="modal-body" id="replacementModalBody">
+                <div class="text-center">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p>Mencari kandidat pengganti...</p>
+                </div>
             </div>
         </div>
     </div>
@@ -364,7 +507,19 @@
 
 @section('scripts')
 <script>
-
+    function confirmSchedule(jadwalId, status) {
+        const action = status === 'terima' ? 'menerima' : 'menolak';
+        const message = `Apakah Anda yakin ${action} jadwal pelayanan ini?`;
+        
+        if (confirm(message)) {
+            // Create form and submit
+            const form = document.createElement('form');
+            form.method = 'GET';
+            form.action = `/pelayanan/konfirmasi/${jadwalId}/${status}`;
+            document.body.appendChild(form);
+            form.submit();
+        }
+    }
     
     function deleteSchedule(id) {
         if (confirm('Apakah Anda yakin ingin menghapus jadwal ini?')) {
@@ -388,6 +543,189 @@
             document.body.appendChild(form);
             form.submit();
         }
+    }
+    
+    function findReplacement(replacementId = null, jadwalId = null) {
+        const modalBody = document.getElementById('replacementModalBody');
+        modalBody.innerHTML = `
+            <div class="text-center">
+                <div class="spinner-border" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p>Mencari kandidat pengganti...</p>
+            </div>
+        `;
+        
+        const url = replacementId ? 
+            `/pelayanan/api/replacement-candidates/${replacementId}` : 
+            `/pelayanan/api/schedule-replacement-candidates/${jadwalId}`;
+        
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                if (data.candidates && data.candidates.length > 0) {
+                    let html = `
+                        <form id="replacementForm">
+                            <input type="hidden" name="replacement_id" value="${replacementId}">
+                            <input type="hidden" name="jadwal_id" value="${jadwalId}">
+                            
+                            <div class="mb-3">
+                                <h6>Kandidat Pengganti:</h6>
+                                <div class="list-group">
+                    `;
+                    
+                    data.candidates.forEach((candidate, index) => {
+                        const categoryBadge = candidate.category === 'same_position' ? 
+                            '<span class="badge bg-success">Posisi Sama</span>' : 
+                            '<span class="badge bg-warning">Posisi Berbeda</span>';
+                        
+                        const regularBadge = candidate.is_reguler ? 
+                            '<span class="badge bg-primary ms-1">Reguler</span>' : '';
+                        
+                        html += `
+                            <div class="list-group-item">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="replacement_candidate" 
+                                           value="${candidate.anggota.id_anggota}" id="candidate${index}"
+                                           ${index === 0 ? 'checked' : ''}>
+                                    <label class="form-check-label w-100" for="candidate${index}">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <strong>${candidate.anggota.nama}</strong>
+                                                ${categoryBadge}${regularBadge}
+                                                <br><small class="text-muted">Score: ${Math.round(candidate.score)}</small>
+                                            </div>
+                                            <div class="text-end">
+                                                <small class="text-muted">Prioritas: ${candidate.prioritas || 0}/10</small>
+                                            </div>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    
+                    html += `
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Catatan (Opsional):</label>
+                                <textarea class="form-control" name="notes" rows="2" placeholder="Alasan penggantian atau catatan lainnya..."></textarea>
+                            </div>
+                            <div class="d-flex justify-content-end gap-2">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                                <button type="button" class="btn btn-primary" onclick="assignReplacement()">Assign Pengganti</button>
+                            </div>
+                        </form>
+                    `;
+                } else {
+                    html = `
+                        <div class="text-center py-4">
+                            <i class="fas fa-user-times fa-3x text-muted mb-3"></i>
+                            <h5>Tidak Ada Kandidat Tersedia</h5>
+                            <p class="text-muted">Tidak ditemukan anggota yang tersedia untuk menggantikan posisi ini.</p>
+                            <form id="noReplacementForm">
+                                <input type="hidden" name="replacement_id" value="${replacementId}">
+                                <input type="hidden" name="jadwal_id" value="${jadwalId}">
+                                <div class="mb-3">
+                                    <label class="form-label">Catatan:</label>
+                                    <textarea class="form-control" name="notes" rows="2" placeholder="Alasan mengapa tidak ada pengganti..." required></textarea>
+                                </div>
+                                <div class="d-flex justify-content-end gap-2">
+                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                                    <button type="button" class="btn btn-warning" onclick="markNoReplacement()">Tandai Tidak Ada Pengganti</button>
+                                </div>
+                            </form>
+                        </div>
+                    `;
+                }
+                
+                modalBody.innerHTML = html;
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                modalBody.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        Terjadi kesalahan saat mencari kandidat pengganti.
+                    </div>
+                `;
+            });
+    }
+    
+    function assignReplacement() {
+        const form = document.getElementById('replacementForm');
+        const formData = new FormData(form);
+        
+        fetch('/pelayanan/api/assign-replacement', {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                replacement_id: formData.get('replacement_id'),
+                jadwal_id: formData.get('jadwal_id'),
+                candidate_id: formData.get('replacement_candidate'),
+                notes: formData.get('notes')
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Pengganti berhasil di-assign!');
+                location.reload();
+            } else {
+                alert('Gagal assign pengganti: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Terjadi kesalahan saat assign pengganti');
+        });
+    }
+    
+    function markNoReplacement() {
+        const form = document.getElementById('noReplacementForm');
+        const formData = new FormData(form);
+        
+        fetch('/pelayanan/api/mark-no-replacement', {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                replacement_id: formData.get('replacement_id'),
+                jadwal_id: formData.get('jadwal_id'),
+                notes: formData.get('notes')
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Status berhasil diupdate!');
+                location.reload();
+            } else {
+                alert('Gagal update status: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Terjadi kesalahan saat update status');
+        });
+    }
+    
+    function copySchedule(pelaksanaanId) {
+        if (confirm('Copy jadwal pelayanan ini untuk pelaksanaan lain?')) {
+            // Implementation for copying schedule
+            alert('Fitur copy jadwal akan segera tersedia!');
+        }
+    }
+    
+    function changeAssignee(jadwalId) {
+        // Implementation for changing assignee
+        alert('Fitur ganti petugas akan segera tersedia!');
     }
     
     function sendNotifications() {
@@ -416,18 +754,5 @@
             });
         }
     }
-    
-    // Auto refresh notification for new schedules
-    setInterval(function() {
-        // Check for new notifications
-        fetch('{{ route("pelayanan.index") }}?check_updates=1')
-            .then(response => response.json())
-            .then(data => {
-                if (data.has_updates) {
-                    // Show notification badge or update UI
-                }
-            })
-            .catch(error => console.log('Update check failed'));
-    }, 30000); // Check every 30 seconds
 </script>
 @endsection
