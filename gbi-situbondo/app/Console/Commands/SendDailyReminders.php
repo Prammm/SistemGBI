@@ -86,7 +86,7 @@ class SendDailyReminders extends Command
             try {
                 if (!$dryRun) {
                     Mail::to($jadwal->anggota->email)
-                        ->send(new EnhancedPelayananReminder($jadwal, $when));
+                        ->send(new PelayananReminder($jadwal, $when));
                 }
                 
                 $this->info("✓ Pelayanan reminder sent to {$jadwal->anggota->email}");
@@ -167,7 +167,7 @@ class SendDailyReminders extends Command
                 try {
                     if (!$dryRun) {
                         Mail::to($member->email)
-                            ->send(new EnhancedIbadahReminder($event, $member, $when));
+                            ->send(new IbadahReminder($event, $member, $when));
                     }
                     
                     $this->info("✓ Ibadah reminder sent to {$member->email}");

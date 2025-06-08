@@ -12,7 +12,7 @@ use App\Models\PelaksanaanKegiatan;
 use App\Models\Anggota;
 use Carbon\Carbon;
 
-class EnhancedIbadahReminder extends Mailable implements ShouldQueue
+class IbadahReminder extends Mailable implements ShouldQueue
 {
     use Queueable, SerializesModels;
 
@@ -43,7 +43,7 @@ class EnhancedIbadahReminder extends Mailable implements ShouldQueue
     public function content(): Content
     {
         return new Content(
-            view: 'emails.enhanced-ibadah-reminder',
+            view: 'emails.ibadah-reminder',
             with: [
                 'nama_anggota' => $this->anggota->nama,
                 'nama_ibadah' => $this->ibadah->kegiatan->nama_kegiatan,

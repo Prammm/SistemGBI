@@ -11,9 +11,9 @@ use App\Models\JadwalPelayanan;
 use App\Models\PelaksanaanKegiatan;
 use App\Models\Anggota;
 use App\Models\Komsel;
-use App\Mail\EnhancedPelayananReminder;
+use App\Mail\PelayananReminder;
 use App\Mail\KomselReminder;
-use App\Mail\EnhancedIbadahReminder;
+use App\Mail\IbadahReminder;
 use Illuminate\Support\Facades\Mail;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
@@ -92,7 +92,7 @@ class SendDailyReminders implements ShouldQueue
             $emailJobs[] = [
                 'type' => 'pelayanan_reminder',
                 'email' => $jadwal->anggota->email,
-                'mail_class' => EnhancedPelayananReminder::class,
+                'mail_class' => PelayananReminder::class,
                 'mail_data' => [$jadwal, $this->reminderType]
             ];
         }
@@ -153,7 +153,7 @@ class SendDailyReminders implements ShouldQueue
                 $emailJobs[] = [
                     'type' => 'ibadah_reminder',
                     'email' => $member->email,
-                    'mail_class' => EnhancedIbadahReminder::class,
+                    'mail_class' => IbadahReminder::class,
                     'mail_data' => [$event, $member, $this->reminderType]
                 ];
             }

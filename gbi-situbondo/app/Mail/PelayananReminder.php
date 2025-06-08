@@ -11,7 +11,7 @@ use Illuminate\Queue\SerializesModels;
 use App\Models\JadwalPelayanan;
 use Carbon\Carbon;
 
-class EnhancedPelayananReminder extends Mailable implements ShouldQueue
+class PelayananReminder extends Mailable implements ShouldQueue
 {
     use Queueable, SerializesModels;
 
@@ -42,7 +42,7 @@ class EnhancedPelayananReminder extends Mailable implements ShouldQueue
         $pelaksanaan = $this->jadwal->pelaksanaan;
         
         return new Content(
-            view: 'emails.enhanced-pelayanan-reminder',
+            view: 'emails.pelayanan-reminder',
             with: [
                 'nama' => $this->jadwal->anggota->nama,
                 'kegiatan' => $pelaksanaan ? $pelaksanaan->kegiatan->nama_kegiatan : 'Kegiatan',

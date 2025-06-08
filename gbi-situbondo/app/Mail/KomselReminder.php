@@ -46,7 +46,7 @@ class KomselReminder extends Mailable implements ShouldQueue
     public function content(): Content
     {
         return new Content(
-            view: 'emails.enhanced-komsel-reminder',
+            view: 'emails.komsel-reminder',
             with: [
                 'nama_anggota' => $this->anggota->nama,
                 'nama_komsel' => $this->komsel->nama_komsel,
