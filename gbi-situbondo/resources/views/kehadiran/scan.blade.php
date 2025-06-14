@@ -282,21 +282,7 @@
             </button>
         </div>
         
-        <div class="manual-input-card">
-            <h6><i class="fas fa-edit me-2"></i>Alternatif Input Manual</h6>
-            <p class="mb-3">Jika tidak bisa menggunakan scanner, Anda bisa input presensi secara manual</p>
-            @if(Auth::user()->id_role <= 3)
-                <a href="{{ route('kehadiran.create', ['id_pelaksanaan' => $pelaksanaan->id_pelaksanaan]) }}" class="btn btn-outline-primary">
-                    <i class="fas fa-clipboard-list"></i> Input Manual
-                </a>
-            @else
-                <div class="alert alert-info">
-                    <i class="fas fa-info-circle me-2"></i>
-                    Input manual hanya tersedia untuk admin dan petugas pelayanan.
-                    Anggota umum harus menggunakan QR Scanner terlebih dahulu.
-                </div>
-            @endif
-        </div>
+
         
         <div class="qr-code-fallback">
             <h6><i class="fas fa-qrcode me-2"></i>QR Code Statis</h6>
