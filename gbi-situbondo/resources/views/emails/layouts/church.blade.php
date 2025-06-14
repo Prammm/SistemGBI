@@ -136,7 +136,7 @@
         
         <div class="footer">
             <p><strong>GBI Situbondo</strong></p>
-            <p>Jl. Contoh No. 123, Situbondo, Jawa Timur</p>
+            <p>Jl. Pb. Sudirman, Karangasem, Situbondo, Jawa Timur</p>
             <p>Telepon: {{ env('CHURCH_PHONE', '+62 123 456 789') }} | Email: {{ env('CHURCH_EMAIL', 'info@gbisitubondo.org') }}</p>
             <p style="margin-top: 15px; font-size: 12px; color: #999;">
                 Email ini dikirim secara otomatis oleh sistem. Mohon jangan membalas email ini.

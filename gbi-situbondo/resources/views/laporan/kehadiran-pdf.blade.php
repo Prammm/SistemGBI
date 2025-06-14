@@ -50,7 +50,7 @@
 <body>
     <div class="header">
         <h1>GBI SITUBONDO</h1>
-        <div>Jl. Contoh No. 123, Situbondo</div>
+        <div>Jl. Pb. Sudirman, Karangasem, Situbondo</div>
         <div>Telp: (0338) 123456 | Email: gbisitubondo@example.com</div>
     </div>
     
