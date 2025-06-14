@@ -18,8 +18,15 @@ class PelaksanaanKegiatanController extends Controller
         // If admin, show all activities
         if ($user->id_role <= 2) {
             $pelaksanaan = PelaksanaanKegiatan::with('kegiatan')
-                ->orderByRaw('DATE(tanggal_kegiatan) ASC')
-                ->orderBy('jam_mulai', 'asc')
+                ->orderByRaw('
+                    CASE 
+                        WHEN DATE(tanggal_kegiatan) = CURDATE() THEN 0
+                        WHEN DATE(tanggal_kegiatan) > CURDATE() THEN 1 
+                        ELSE 2 
+                    END,
+                    DATE(tanggal_kegiatan) ASC,
+                    jam_mulai ASC
+                ')
                 ->get();
         }
         // If regular member or service staff (roles 3 and 4)
@@ -32,8 +39,15 @@ class PelaksanaanKegiatanController extends Controller
                     ->whereHas('kegiatan', function($query) {
                         $query->where('tipe_kegiatan', '!=', 'komsel');
                     })
-                    ->orderByRaw('DATE(tanggal_kegiatan) ASC')
-                    ->orderBy('jam_mulai', 'asc')
+                    ->orderByRaw('
+                        CASE 
+                            WHEN DATE(tanggal_kegiatan) = CURDATE() THEN 0
+                            WHEN DATE(tanggal_kegiatan) > CURDATE() THEN 1 
+                            ELSE 2 
+                        END,
+                        DATE(tanggal_kegiatan) ASC,
+                        jam_mulai ASC
+                    ')
                     ->get();
             } else {
                 // Get user's komsel names for the activities filter
@@ -59,8 +73,15 @@ class PelaksanaanKegiatanController extends Controller
                             $subquery->where('tipe_kegiatan', '!=', 'komsel');
                         });
                     })
-                    ->orderByRaw('DATE(tanggal_kegiatan) ASC')
-                    ->orderBy('jam_mulai', 'asc')
+                    ->orderByRaw('
+                        CASE 
+                            WHEN DATE(tanggal_kegiatan) = CURDATE() THEN 0
+                            WHEN DATE(tanggal_kegiatan) > CURDATE() THEN 1 
+                            ELSE 2 
+                        END,
+                        DATE(tanggal_kegiatan) ASC,
+                        jam_mulai ASC
+                    ')
                     ->get();
             }
         }
@@ -148,27 +169,60 @@ class PelaksanaanKegiatanController extends Controller
         return view('pelaksanaan.show', compact('pelaksanaan', 'qrUrl'));
     }
 
+    public function edit(PelaksanaanKegiatan $pelaksanaan)
+    {
+        $kegiatan = Kegiatan::orderBy('nama_kegiatan')->get();
+        return view('pelaksanaan.edit', compact('pelaksanaan', 'kegiatan'));
+    }
+
     public function update(Request $request, PelaksanaanKegiatan $pelaksanaan)
     {
-        $request->validate([
+        $rules = [
             'id_kegiatan' => 'required|exists:kegiatan,id_kegiatan',
             'tanggal_kegiatan' => 'required|date',
-            'jam_mulai' => 'required',
-            'jam_selesai' => 'required|after:jam_mulai',
+            'jam_mulai' => 'required|date_format:H:i',
+            'jam_selesai' => 'required|date_format:H:i|after:jam_mulai',
             'lokasi' => 'nullable|string|max:255',
-        ], [
+        ];
+
+        // Add recurring validation only if it's a recurring event being edited
+        if ($pelaksanaan->is_recurring) {
+            $rules['recurring_type'] = 'required|in:weekly,monthly';
+            $rules['recurring_end_date'] = 'required|date|after:tanggal_kegiatan';
+        }
+
+        $request->validate($rules, [
             'jam_selesai.after' => 'Jam selesai harus lebih besar dari jam mulai',
+            'recurring_end_date.after' => 'Tanggal berakhir harus lebih besar dari tanggal kegiatan',
         ]);
 
-        $pelaksanaan->update([
-            'id_kegiatan' => $request->id_kegiatan,
-            'tanggal_kegiatan' => $request->tanggal_kegiatan,
-            'jam_mulai' => $request->jam_mulai,
-            'jam_selesai' => $request->jam_selesai,
-            'lokasi' => $request->lokasi,
-        ]);
+        try {
+            DB::beginTransaction();
 
-        return redirect()->route('pelaksanaan.index')->with('success', 'Jadwal kegiatan berhasil diperbarui!');
+            $updateData = [
+                'id_kegiatan' => $request->id_kegiatan,
+                'tanggal_kegiatan' => $request->tanggal_kegiatan,
+                'jam_mulai' => $request->jam_mulai,
+                'jam_selesai' => $request->jam_selesai,
+                'lokasi' => $request->lokasi,
+            ];
+
+            // If this is a recurring event, update recurring fields
+            if ($pelaksanaan->is_recurring) {
+                $updateData['recurring_type'] = $request->recurring_type;
+                $updateData['recurring_end_date'] = $request->recurring_end_date;
+            }
+
+            $pelaksanaan->update($updateData);
+
+            DB::commit();
+
+            return redirect()->route('pelaksanaan.index')->with('success', 'Jadwal kegiatan berhasil diperbarui!');
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return redirect()->back()->with('error', 'Terjadi kesalahan: ' . $e->getMessage())->withInput();
+        }
     }
 
     public function destroy(PelaksanaanKegiatan $pelaksanaan)

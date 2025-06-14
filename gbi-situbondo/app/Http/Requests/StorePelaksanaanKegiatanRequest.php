@@ -27,8 +27,8 @@ class StorePelaksanaanKegiatanRequest extends FormRequest
             'jam_selesai' => 'required|date_format:H:i|after:jam_mulai',
             'lokasi' => 'nullable|string|max:255',
             'is_recurring' => 'boolean',
-            'recurring_type' => 'required_if:is_recurring,1|in:weekly,monthly',
-            'recurring_end_date' => 'required_if:is_recurring,1|date|after:tanggal_kegiatan',
+            'recurring_type' => 'required_if:is_recurring,true|nullable|in:weekly,monthly',
+            'recurring_end_date' => 'required_if:is_recurring,true|nullable|date|after:tanggal_kegiatan',
         ];
     }
 
@@ -63,8 +63,8 @@ class StorePelaksanaanKegiatanRequest extends FormRequest
     public function withValidator($validator)
     {
         $validator->after(function ($validator) {
-            // Additional validation for recurring schedules
-            if ($this->boolean('is_recurring')) {
+            // Additional validation for recurring schedules - only if is_recurring is true
+            if ($this->boolean('is_recurring') && $this->filled(['tanggal_kegiatan', 'recurring_end_date', 'recurring_type'])) {
                 $startDate = Carbon::parse($this->tanggal_kegiatan);
                 $endDate = Carbon::parse($this->recurring_end_date);
                 
