@@ -394,6 +394,7 @@
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.10.1/locales/id.js"></script>
 <script>
     let calendar;
+    let isEventClickProcessing = false; // Flag to prevent duplicate clicks
     
     document.addEventListener('DOMContentLoaded', function() {
         const calendarEl = document.getElementById('calendar');
@@ -425,15 +426,45 @@
                 next: 'chevron-right'
             },
             
+            // FIXED: Single event click handling with debounce
             eventClick: function(info) {
-                if (info.event.url) {
-                    // Open in new tab with better UX
-                    const newWindow = window.open(info.event.url, '_blank');
-                    if (newWindow) {
-                        newWindow.focus();
-                    }
+                // Prevent duplicate clicks
+                if (isEventClickProcessing) {
                     return false;
                 }
+                
+                if (info.event.url) {
+                    isEventClickProcessing = true;
+                    
+                    // Add visual feedback
+                    info.el.style.opacity = '0.7';
+                    info.el.style.transform = 'scale(0.95)';
+                    
+                    // Use setTimeout to ensure single execution
+                    setTimeout(() => {
+                        // Open in new tab
+                        const newWindow = window.open(info.event.url, '_blank');
+                        if (newWindow) {
+                            newWindow.focus();
+                        }
+                        
+                        // Reset visual state
+                        info.el.style.opacity = '';
+                        info.el.style.transform = '';
+                        
+                        // Reset processing flag after delay
+                        setTimeout(() => {
+                            isEventClickProcessing = false;
+                        }, 500);
+                    }, 100);
+                    
+                    // Prevent default behavior and stop propagation
+                    info.jsEvent.preventDefault();
+                    info.jsEvent.stopPropagation();
+                    return false;
+                }
+                
+                return false;
             },
             
             eventMouseEnter: function(info) {
@@ -465,11 +496,15 @@
                     tooltipContent += `<div><i class="fas fa-clock me-2"></i><strong>Waktu:</strong> ${startTime}${endTime ? ' - ' + endTime : ''}</div>`;
                 }
                 
+                // Add click instruction
+                if (info.event.url) {
+                    tooltipContent += `<div class="mt-2 pt-2" style="border-top: 1px solid #e9ecef; font-size: 0.8rem; color: #6c757d;"><i class="fas fa-mouse-pointer me-1"></i>Klik untuk melihat detail</div>`;
+                }
+                
                 contentEl.innerHTML = tooltipContent;
                 
                 // Position tooltip with better logic
                 const rect = info.el.getBoundingClientRect();
-                const tooltipRect = tooltip.getBoundingClientRect();
                 
                 let top = rect.top + window.scrollY - tooltip.offsetHeight - 10;
                 let left = rect.left + window.scrollX + (rect.width / 2) - (tooltip.offsetWidth / 2);
@@ -498,6 +533,8 @@
                 // Hide tooltip on window resize
                 const tooltip = document.getElementById('event-tooltip');
                 tooltip.classList.remove('show');
+                // Reset processing flag on resize
+                isEventClickProcessing = false;
             },
             
             loading: function(bool) {
@@ -542,9 +579,6 @@
             selectMirror: true,
             eventResizableFromStart: false,
             
-            // Prevent button text duplication issue
-            customButtons: {},
-            
             // Add event content styling
             eventContent: function(arg) {
                 return {
@@ -577,7 +611,7 @@
             calendar.gotoDate(selectedDate);
             
             // Add visual feedback
-            const btn = document.querySelector('.go-to-date-btn');
+            const btn = event.target;
             const originalText = btn.innerHTML;
             btn.innerHTML = '<i class="fas fa-check me-1"></i>Berhasil!';
             btn.style.background = 'linear-gradient(135deg, #28a745 0%, #20c997 100%)';
@@ -634,6 +668,19 @@
     window.addEventListener('resize', function() {
         const tooltip = document.getElementById('event-tooltip');
         tooltip.classList.remove('show');
+        // Reset click processing flag on resize
+        isEventClickProcessing = false;
     });
+    
+    // Additional protection against rapid clicks
+    document.addEventListener('click', function(e) {
+        if (e.target.closest('.fc-event')) {
+            if (isEventClickProcessing) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+        }
+    }, true);
 </script>
-@endsection</content>
+@endsection
