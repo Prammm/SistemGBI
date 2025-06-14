@@ -282,32 +282,7 @@
             @endif
         </div>
     </div>
-    
-    <!-- Position Distribution Chart -->
-    <div class="row">
-        <div class="col-xl-8">
-            <div class="card mb-4">
-                <div class="card-header">
-                    <i class="fas fa-chart-pie me-1"></i>
-                    Distribusi Posisi
-                </div>
-                <div class="card-body">
-                    <canvas id="positionChart" width="400" height="200"></canvas>
-                </div>
-            </div>
-        </div>
-        <div class="col-xl-4">
-            <div class="card mb-4">
-                <div class="card-header">
-                    <i class="fas fa-chart-bar me-1"></i>
-                    Status Reguler
-                </div>
-                <div class="card-body">
-                    <canvas id="regularChart" width="400" height="200"></canvas>
-                </div>
-            </div>
-        </div>
-    </div>
+
 </div>
 @endsection
 
