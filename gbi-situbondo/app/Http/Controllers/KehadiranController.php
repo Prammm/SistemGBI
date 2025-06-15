@@ -390,15 +390,16 @@ class KehadiranController extends Controller
             
             DB::commit();
             
-            // Check if user has family members
-            $familyMembers = [];
+            // Check if user has family members - FIXED: Initialize as empty collection
+            $familyMembers = collect();
             if ($anggota->id_keluarga) {
                 $familyMembers = Anggota::where('id_keluarga', $anggota->id_keluarga)
                     ->where('id_anggota', '!=', $anggota->id_anggota)
                     ->get();
             }
             
-            if ($familyMembers->count() > 0) {
+            // FIXED: Use count() method on collection, or use isEmpty() for better readability
+            if ($familyMembers->isNotEmpty()) {
                 // Redirect to family attendance page
                 return redirect()->route('kehadiran.family-attendance', [
                     'id_pelaksanaan' => $pelaksanaan->id_pelaksanaan

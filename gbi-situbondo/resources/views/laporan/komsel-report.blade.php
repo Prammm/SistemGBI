@@ -42,7 +42,7 @@
     
     .user-selector-form {
         display: grid;
-        grid-template-columns: 1fr 1fr auto;
+        grid-template-columns: 1fr 1fr auto auto;
         gap: 15px;
         align-items: end;
     }
@@ -266,38 +266,6 @@
         overflow: hidden;
     }
     
-    .activity-item {
-        padding: 20px;
-        border-bottom: 1px solid #f8f9fa;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-    
-    .activity-item:last-child {
-        border-bottom: none;
-    }
-    
-    .activity-info h6 {
-        margin: 0 0 5px 0;
-        color: #333;
-    }
-    
-    .activity-meta {
-        color: #6c757d;
-        font-size: 0.9rem;
-    }
-    
-    .activity-attendance {
-        text-align: right;
-    }
-    
-    .attendance-number {
-        font-size: 1.2rem;
-        font-weight: bold;
-        color: #f6c23e;
-    }
-    
     .filter-section {
         display: flex;
         gap: 15px;
@@ -307,8 +275,12 @@
     }
     
     .export-buttons {
-        text-align: center;
-        margin-top: 30px;
+        margin-bottom: 15px;
+    }
+    
+    .export-buttons .btn {
+        margin-right: 10px;
+        margin-bottom: 5px;
     }
     
     .no-data-message {
@@ -321,6 +293,85 @@
         font-size: 4rem;
         margin-bottom: 20px;
         opacity: 0.3;
+    }
+    
+    /* Custom DataTable Styling */
+    .dataTables_wrapper {
+        padding: 0;
+    }
+    
+    .dataTables_filter {
+        margin-bottom: 15px;
+    }
+    
+    .dataTables_filter input {
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        padding: 6px 12px;
+        margin-left: 8px;
+    }
+    
+    .dataTables_length select {
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        padding: 4px 8px;
+        margin: 0 8px;
+    }
+    
+    .dataTables_info {
+        padding-top: 8px;
+        color: #6c757d;
+    }
+    
+    .dataTables_paginate {
+        padding-top: 8px;
+    }
+    
+    .dataTables_paginate .paginate_button {
+        padding: 0.375rem 0.75rem;
+        margin-left: 2px;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        color: #495057;
+        text-decoration: none;
+    }
+    
+    .dataTables_paginate .paginate_button:hover {
+        background: #e9ecef;
+        border-color: #adb5bd;
+    }
+    
+    .dataTables_paginate .paginate_button.current {
+        background: #f6c23e;
+        border-color: #f6c23e;
+        color: white !important;
+    }
+    
+    .table-responsive {
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .table th {
+        background-color: #f8f9fa;
+        border-bottom: 2px solid #dee2e6;
+        font-weight: 600;
+        color: #495057;
+    }
+    
+    .table td {
+        vertical-align: middle;
+        border-bottom: 1px solid #dee2e6;
+    }
+    
+    .table tbody tr:hover {
+        background-color: rgba(246, 194, 62, 0.05);
+    }
+    
+    .badge {
+        font-size: 0.75em;
+        padding: 0.5em 0.75em;
     }
     
     @media (max-width: 768px) {
@@ -371,7 +422,7 @@
     </ol>
     
     <div class="komsel-header">
-        {{-- User Selection for Admin/Pengurus/Petugas Pelayanan --}}
+        {{-- User Selection for Admin/Pengurus ONLY --}}
         @if($canSelectUser && $komselLeaders->count() > 0)
             <div class="user-selector-card">
                 <div class="user-selector-title">
@@ -425,26 +476,16 @@
                         <label for="start_date">Tanggal Mulai:</label>
                         <input type="date" id="start_date" name="start_date" class="form-control" value="{{ $startDate->format('Y-m-d') }}">
                     </div>
-                    <div class="export-buttons">
-                        <!-- NEW: Export buttons for komsel report -->
-                        <a href="{{ route('laporan.export', ['jenis' => 'komsel-report', 'format' => 'pdf']) }}?user_id={{ $selectedUserId }}&komsel_id={{ $selectedKomsel->id_komsel }}&start_date={{ $startDate->format('Y-m-d') }}&end_date={{ $endDate->format('Y-m-d') }}" 
-                        class="btn btn-danger ms-2">
-                            <i class="fas fa-file-pdf me-2"></i>Export PDF
-                        </a>
-                        <a href="{{ route('laporan.export', ['jenis' => 'komsel-report', 'format' => 'excel']) }}?user_id={{ $selectedUserId }}&komsel_id={{ $selectedKomsel->id_komsel }}&start_date={{ $startDate->format('Y-m-d') }}&end_date={{ $endDate->format('Y-m-d') }}" 
-                        class="btn btn-success ms-2">
-                            <i class="fas fa-file-excel me-2"></i>Export Excel
-                        </a>
-                        <a href="{{ route('laporan.index') }}" class="btn btn-secondary ms-2">
-                            <i class="fas fa-arrow-left me-2"></i>Kembali
-                        </a>
-                    </div>
                     <div>
                         <button type="submit" class="btn btn-light">
                             <i class="fas fa-search me-2"></i>Lihat Laporan
                         </button>
                     </div>
-
+                    <div>
+                        <a href="{{ route('laporan.index') }}" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left me-2"></i>Kembali
+                        </a>
+                    </div>
                 </form>
             </div>
         @endif
@@ -600,35 +641,75 @@
                     <i class="fas fa-calendar-alt me-2"></i>Riwayat Pertemuan Komsel
                 </h5>
             </div>
-            <div class="card-body p-0">
-                @foreach($pelaksanaanKomsel as $pertemuan)
-                    @php
-                        $pertemuanKehadiran = $kehadiran->where('id_pelaksanaan', $pertemuan->id_pelaksanaan);
-                        $attendanceCount = $pertemuanKehadiran->count();
-                        $totalMembers = $selectedKomsel->anggota->count();
-                    @endphp
-                    
-                    <div class="activity-item">
-                        <div class="activity-info">
-                            <h6>Pertemuan {{ \Carbon\Carbon::parse($pertemuan->tanggal_kegiatan)->format('d F Y') }}</h6>
-                            <div class="activity-meta">
-                                <i class="fas fa-clock me-1"></i>
-                                {{ \Carbon\Carbon::parse($pertemuan->jam_mulai)->format('H:i') }} - 
-                                {{ \Carbon\Carbon::parse($pertemuan->jam_selesai)->format('H:i') }}
-                                @if($pertemuan->lokasi)
-                                    &nbsp;•&nbsp;
-                                    <i class="fas fa-map-marker-alt me-1"></i>{{ $pertemuan->lokasi }}
-                                @endif
-                            </div>
-                        </div>
-                        <div class="activity-attendance">
-                            <div class="attendance-number">{{ $attendanceCount }}/{{ $totalMembers }}</div>
-                            <div class="text-muted small">
-                                {{ $totalMembers > 0 ? round(($attendanceCount / $totalMembers) * 100) : 0 }}% hadir
-                            </div>
-                        </div>
+            <div class="card-body">
+                <!-- Export Buttons -->
+                @if(!$canSelectUser || !$selectedUserId)
+                    <div class="export-buttons">
+                        <a href="{{ route('laporan.export', ['jenis' => 'komsel-report', 'format' => 'pdf']) }}?user_id={{ $selectedUserId }}&komsel_id={{ $selectedKomsel->id_komsel }}&start_date={{ $startDate->format('Y-m-d') }}&end_date={{ $endDate->format('Y-m-d') }}" 
+                           class="btn btn-danger btn-sm">
+                            <i class="fas fa-file-pdf me-1"></i>Export PDF
+                        </a>
+                        <a href="{{ route('laporan.export', ['jenis' => 'komsel-report', 'format' => 'excel']) }}?user_id={{ $selectedUserId }}&komsel_id={{ $selectedKomsel->id_komsel }}&start_date={{ $startDate->format('Y-m-d') }}&end_date={{ $endDate->format('Y-m-d') }}" 
+                           class="btn btn-success btn-sm">
+                            <i class="fas fa-file-excel me-1"></i>Export Excel
+                        </a>
                     </div>
-                @endforeach
+                @endif
+                
+                <!-- DataTable -->
+                <div class="table-responsive">
+                    <table id="pertemuanTable" class="table table-striped table-hover">
+                        <thead>
+                            <tr>
+                                <th width="120">Tanggal</th>
+                                <th width="100">Waktu</th>
+                                <th>Lokasi</th>
+                                <th width="120">Jumlah Hadir</th>
+                                <th width="100">Persentase</th>
+                                <th width="200">Keterangan</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($pelaksanaanKomsel as $pertemuan)
+                                @php
+                                    $pertemuanKehadiran = $kehadiran->where('id_pelaksanaan', $pertemuan->id_pelaksanaan);
+                                    $attendanceCount = $pertemuanKehadiran->count();
+                                    $totalMembers = $selectedKomsel->anggota->count();
+                                    $attendancePercentage = $totalMembers > 0 ? round(($attendanceCount / $totalMembers) * 100) : 0;
+                                @endphp
+                                
+                                <tr>
+                                    <td>{{ \Carbon\Carbon::parse($pertemuan->tanggal_kegiatan)->format('d-m-Y') }}</td>
+                                    <td>
+                                        <small>
+                                            {{ \Carbon\Carbon::parse($pertemuan->jam_mulai)->format('H:i') }} - 
+                                            {{ \Carbon\Carbon::parse($pertemuan->jam_selesai)->format('H:i') }}
+                                        </small>
+                                    </td>
+                                    <td>
+                                        <small>{{ $pertemuan->lokasi ?? $selectedKomsel->lokasi ?? '-' }}</small>
+                                    </td>
+                                    <td>
+                                        <strong>{{ $attendanceCount }}/{{ $totalMembers }}</strong>
+                                    </td>
+                                    <td>
+                                        <span class="badge 
+                                            @if($attendancePercentage >= 80) bg-success
+                                            @elseif($attendancePercentage >= 60) bg-warning text-dark
+                                            @elseif($attendancePercentage >= 40) bg-info
+                                            @else bg-danger
+                                            @endif">
+                                            {{ $attendancePercentage }}%
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <small>{{ $pertemuan->keterangan ?? '-' }}</small>
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     @else
@@ -638,9 +719,11 @@
                 <h5>Tidak Ada Data Pertemuan</h5>
                 <p>Belum ada pertemuan komsel yang terjadwal dalam periode yang dipilih.</p>
                 @if(!$canSelectUser || !$selectedUserId)
-                    <a href="{{ route('komsel.show', $selectedKomsel->id_komsel) }}" class="btn btn-warning">
-                        <i class="fas fa-calendar-plus me-2"></i>Jadwalkan Pertemuan
-                    </a>
+                    @if(Route::has('komsel.show'))
+                        <a href="{{ route('komsel.show', $selectedKomsel->id_komsel) }}" class="btn btn-warning">
+                            <i class="fas fa-calendar-plus me-2"></i>Jadwalkan Pertemuan
+                        </a>
+                    @endif
                 @endif
             </div>
         </div>
@@ -653,19 +736,37 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Initialize DataTable
+    @if($pelaksanaanKomsel->count() > 0)
+        const pertemuanTable = new simpleDatatables.DataTable("#pertemuanTable", {
+            searchable: true,
+            sortable: true,
+            paging: true,
+            perPage: 25,
+            perPageSelect: [10, 25, 50, 100],
+            labels: {
+                placeholder: "Cari tanggal, lokasi, atau keterangan...",
+                perPage: "data per halaman",
+                noRows: "Tidak ada data pertemuan",
+                info: "Menampilkan {start} sampai {end} dari {rows} data",
+                previous: "Sebelumnya",
+                next: "Selanjutnya"
+            },
+            layout: {
+                top: "{select}{search}",
+                bottom: "{info}{pager}"
+            }
+        });
+    @endif
+    
     // Variabel untuk menyimpan instance chart
     let attendanceTrendChart = null;
-    let memberDistributionChart = null;
     
     // Function untuk menghancurkan chart yang sudah ada
     function destroyExistingCharts() {
         if (attendanceTrendChart) {
             attendanceTrendChart.destroy();
             attendanceTrendChart = null;
-        }
-        if (memberDistributionChart) {
-            memberDistributionChart.destroy();
-            memberDistributionChart = null;
         }
     }
     
@@ -745,66 +846,6 @@ document.addEventListener('DOMContentLoaded', function() {
                             max: {{ $selectedKomsel->anggota->count() }},
                             ticks: {
                                 precision: 0
-                            },
-                            grid: {
-                                color: 'rgba(0,0,0,0.05)'
-                            }
-                        },
-                        x: {
-                            grid: {
-                                display: false
-                            }
-                        }
-                    }
-                }
-            });
-        }
-        
-        // Member distribution chart
-        const distributionCtx = document.getElementById('memberDistributionChart');
-        if (distributionCtx) {
-            const ctx = distributionCtx.getContext('2d');
-            const attendanceStats = @json($attendanceStats);
-            
-            const memberNames = Object.values(attendanceStats).map(stat => stat.anggota.nama.split(' ')[0]);
-            const memberPercentages = Object.values(attendanceStats).map(stat => stat.persentase);
-            
-            // Generate colors based on performance
-            const memberColors = memberPercentages.map(percentage => {
-                if (percentage >= 90) return 'rgba(40, 167, 69, 0.8)';
-                if (percentage >= 75) return 'rgba(54, 185, 204, 0.8)';
-                if (percentage >= 50) return 'rgba(246, 194, 62, 0.8)';
-                return 'rgba(220, 53, 69, 0.8)';
-            });
-            
-            memberDistributionChart = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: memberNames,
-                    datasets: [{
-                        label: 'Persentase Kehadiran',
-                        data: memberPercentages,
-                        backgroundColor: memberColors,
-                        borderColor: memberColors.map(color => color.replace('0.8', '1')),
-                        borderWidth: 1
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            display: false
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            max: 100,
-                            ticks: {
-                                callback: function(value) {
-                                    return value + '%';
-                                }
                             },
                             grid: {
                                 color: 'rgba(0,0,0,0.05)'

@@ -89,96 +89,12 @@
         overflow: hidden;
     }
     
-    .service-item {
-        padding: 20px;
-        border-bottom: 1px solid #f8f9fa;
-        transition: all 0.3s ease;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-    }
-    
-    .service-item:hover {
-        background: #f8f9fa;
-    }
-    
-    .service-item:last-child {
-        border-bottom: none;
-    }
-    
-    .service-info {
-        flex: 1;
-    }
-    
-    .service-event {
-        font-weight: 600;
-        color: #333;
-        margin-bottom: 5px;
-    }
-    
-    .service-details {
-        color: #6c757d;
-        font-size: 0.9rem;
-    }
-    
-    .service-badge {
-        padding: 8px 15px;
-        border-radius: 20px;
-        font-size: 0.8rem;
-        font-weight: 500;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-    
-    .badge-terima {
-        background: #d4edda;
-        color: #155724;
-        border: 1px solid #c3e6cb;
-    }
-    
-    .badge-belum {
-        background: #fff3cd;
-        color: #856404;
-        border: 1px solid #ffeaa7;
-    }
-    
-    .badge-tolak {
-        background: #f8d7da;
-        color: #721c24;
-        border: 1px solid #f1c6c8;
-    }
-    
     .filter-card {
         background: white;
         border-radius: 15px;
         padding: 20px;
         margin-bottom: 20px;
         box-shadow: 0 5px 15px rgba(0,0,0,0.08);
-    }
-    
-    .period-selector {
-        display: flex;
-        gap: 10px;
-        margin-bottom: 20px;
-        flex-wrap: wrap;
-    }
-    
-    .period-btn {
-        padding: 8px 16px;
-        border: 2px solid #e9ecef;
-        background: white;
-        border-radius: 25px;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        font-size: 0.9rem;
-        font-weight: 500;
-    }
-    
-    .period-btn.active,
-    .period-btn:hover {
-        border-color: #1cc88a;
-        background: #1cc88a;
-        color: white;
     }
     
     .no-data-message {
@@ -284,6 +200,102 @@
         white-space: nowrap;
     }
     
+    .filter-section {
+        display: flex;
+        gap: 15px;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+        align-items: end;
+    }
+    
+    .export-buttons {
+        margin-bottom: 15px;
+    }
+    
+    .export-buttons .btn {
+        margin-right: 10px;
+        margin-bottom: 5px;
+    }
+    
+    /* Custom DataTable Styling */
+    .dataTables_wrapper {
+        padding: 0;
+    }
+    
+    .dataTables_filter {
+        margin-bottom: 15px;
+    }
+    
+    .dataTables_filter input {
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        padding: 6px 12px;
+        margin-left: 8px;
+    }
+    
+    .dataTables_length select {
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        padding: 4px 8px;
+        margin: 0 8px;
+    }
+    
+    .dataTables_info {
+        padding-top: 8px;
+        color: #6c757d;
+    }
+    
+    .dataTables_paginate {
+        padding-top: 8px;
+    }
+    
+    .dataTables_paginate .paginate_button {
+        padding: 0.375rem 0.75rem;
+        margin-left: 2px;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        color: #495057;
+        text-decoration: none;
+    }
+    
+    .dataTables_paginate .paginate_button:hover {
+        background: #e9ecef;
+        border-color: #adb5bd;
+    }
+    
+    .dataTables_paginate .paginate_button.current {
+        background: #1cc88a;
+        border-color: #1cc88a;
+        color: white !important;
+    }
+    
+    .table-responsive {
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .table th {
+        background-color: #f8f9fa;
+        border-bottom: 2px solid #dee2e6;
+        font-weight: 600;
+        color: #495057;
+    }
+    
+    .table td {
+        vertical-align: middle;
+        border-bottom: 1px solid #dee2e6;
+    }
+    
+    .table tbody tr:hover {
+        background-color: rgba(28, 200, 138, 0.05);
+    }
+    
+    .badge {
+        font-size: 0.75em;
+        padding: 0.5em 0.75em;
+    }
+    
     @media (max-width: 768px) {
         .report-header {
             padding: 20px;
@@ -296,15 +308,6 @@
         
         .stats-number {
             font-size: 2rem;
-        }
-        
-        .period-selector {
-            justify-content: center;
-        }
-        
-        .period-btn {
-            flex: 1;
-            min-width: 80px;
         }
         
         .chart-container {
@@ -327,6 +330,14 @@
         .user-selector-form .form-group {
             width: 100%;
             min-width: unset;
+        }
+        
+        .filter-section {
+            flex-direction: column;
+        }
+        
+        .filter-section > div {
+            width: 100%;
         }
     }
 </style>
@@ -378,20 +389,6 @@
                             <i class="fas fa-search me-2"></i>Lihat Laporan
                         </button>
                     </div>
-                    <div class="export-buttons">
-                        <!-- NEW: Export buttons for personal service report -->
-                        <a href="{{ route('laporan.export', ['jenis' => 'personal-service-report', 'format' => 'pdf']) }}?user_id={{ $selectedUserId }}&period={{ $period }}" 
-                        class="btn btn-danger ms-2">
-                            <i class="fas fa-file-pdf me-2"></i>Export PDF
-                        </a>
-                        <a href="{{ route('laporan.export', ['jenis' => 'personal-service-report', 'format' => 'excel']) }}?user_id={{ $selectedUserId }}&period={{ $period }}" 
-                        class="btn btn-success ms-2">
-                            <i class="fas fa-file-excel me-2"></i>Export Excel
-                        </a>
-                        <a href="{{ route('laporan.index') }}" class="btn btn-secondary ms-2">
-                            <i class="fas fa-arrow-left me-2"></i>Kembali
-                        </a>
-                    </div>
                 </form>
             </div>
         @endif
@@ -413,16 +410,53 @@
         </div>
     </div>
     
-    {{-- Period selector for non-admin users or when no user selected --}}
+    {{-- Filter untuk user yang tidak dapat memilih user lain --}}
     @if(!$canSelectUser || !$selectedUserId)
         <div class="filter-card">
-            <h5><i class="fas fa-filter me-2"></i>Filter Periode</h5>
-            <div class="period-selector">
-                <button class="period-btn" data-period="1">1 Bulan</button>
-                <button class="period-btn" data-period="3">3 Bulan</button>
-                <button class="period-btn active" data-period="6">6 Bulan</button>
-                <button class="period-btn" data-period="12">1 Tahun</button>
-            </div>
+            <h5><i class="fas fa-filter me-2"></i>Filter Laporan</h5>
+            <form method="GET" action="{{ route('laporan.personal-service-report') }}" id="filterForm">
+                <div class="filter-section">
+                    <div>
+                        <label for="period" class="form-label">Periode</label>
+                        <select id="period" name="period" class="form-select">
+                            <option value="1" {{ $period == 1 ? 'selected' : '' }}>1 Bulan</option>
+                            <option value="3" {{ $period == 3 ? 'selected' : '' }}>3 Bulan</option>
+                            <option value="6" {{ $period == 6 ? 'selected' : '' }}>6 Bulan</option>
+                            <option value="12" {{ $period == 12 ? 'selected' : '' }}>1 Tahun</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="kegiatan_id" class="form-label">Kegiatan</label>
+                        <select id="kegiatan_id" name="kegiatan_id" class="form-select">
+                            <option value="">-- Semua Kegiatan --</option>
+                            @foreach($kegiatanList as $kegiatan)
+                                <option value="{{ $kegiatan->id_kegiatan }}" 
+                                        {{ $kegiatan_id == $kegiatan->id_kegiatan ? 'selected' : '' }}>
+                                    {{ $kegiatan->nama_kegiatan }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div>
+                        <label for="pelaksanaan_id" class="form-label">Pelaksanaan Spesifik</label>
+                        <select id="pelaksanaan_id" name="pelaksanaan_id" class="form-select">
+                            <option value="">-- Semua Pelaksanaan --</option>
+                            @foreach($pelaksanaanList as $pelaksanaan)
+                                <option value="{{ $pelaksanaan->id_pelaksanaan }}" 
+                                        {{ $pelaksanaan_id == $pelaksanaan->id_pelaksanaan ? 'selected' : '' }}>
+                                    {{ \Carbon\Carbon::parse($pelaksanaan->tanggal_kegiatan)->format('d M Y') }} 
+                                    ({{ \Carbon\Carbon::parse($pelaksanaan->jam_mulai)->format('H:i') }})
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div>
+                        <button type="submit" class="btn btn-success">
+                            <i class="fas fa-search me-2"></i>Terapkan Filter
+                        </button>
+                    </div>
+                </div>
+            </form>
         </div>
     @endif
     
@@ -432,7 +466,12 @@
                 <div class="stats-label">Total Pelayanan</div>
                 <div class="stats-number">{{ $totalPelayanan }}</div>
                 <div class="stats-description">
-                    Dalam {{ round($startDate->floatDiffInMonths($endDate)) }} bulan terakhir
+                    Pelayanan yang diterima dalam {{ round($startDate->floatDiffInMonths($endDate)) }} bulan terakhir
+                    @if($kegiatan_id)
+                        <br><small class="text-muted">
+                            Filter: {{ $kegiatanList->where('id_kegiatan', $kegiatan_id)->first()->nama_kegiatan ?? 'Kegiatan Tidak Ditemukan' }}
+                        </small>
+                    @endif
                 </div>
             </div>
         </div>
@@ -450,7 +489,7 @@
         <div class="col-md-4">
             <div class="stats-card">
                 <div class="stats-label">Posisi Terfavorit</div>
-                <div class="stats-number">{{ $pelayananPerPosisi->count() > 0 ? $pelayananPerPosisi->keys()->first() : '-' }}</div>
+                <div class="stats-number">{{ $pelayananPerPosisi->count() > 0 ? Str::limit($pelayananPerPosisi->keys()->first(), 15) : '-' }}</div>
                 <div class="stats-description">
                     {{ $pelayananPerPosisi->count() > 0 ? $pelayananPerPosisi->first() . ' kali melayani' : 'Belum ada data' }}
                 </div>
@@ -463,7 +502,7 @@
             <div class="col-lg-6">
                 <div class="chart-container">
                     <div class="chart-title">
-                        <i class="fas fa-chart-line me-2"></i>Tren Pelayanan per Bulan
+                        <i class="fas fa-chart-line me-2"></i>Tren Pelayanan per Bulan (Yang Diterima)
                     </div>
                     <div class="chart-wrapper">
                         <canvas id="monthlyChart"></canvas>
@@ -473,7 +512,7 @@
             <div class="col-lg-6">
                 <div class="chart-container">
                     <div class="chart-title">
-                        <i class="fas fa-chart-pie me-2"></i>Pelayanan per Posisi
+                        <i class="fas fa-chart-pie me-2"></i>Pelayanan per Posisi (Yang Diterima)
                     </div>
                     <div class="chart-wrapper">
                         <canvas id="positionChart"></canvas>
@@ -481,59 +520,136 @@
                 </div>
             </div>
         </div>
-        
-        <div class="service-list">
-            <div class="card-header bg-light">
-                <h5 class="mb-0">
-                    <i class="fas fa-list me-2"></i>Riwayat Pelayanan Terbaru
-                </h5>
-            </div>
-            <div class="card-body p-0">
-                @foreach($jadwalPelayanan->take(10) as $pelayanan)
-                    <div class="service-item">
-                        <div class="service-info">
-                            <div class="service-event">
-                                {{ $pelayanan->kegiatan->nama_kegiatan ?? 'Kegiatan Tidak Diketahui' }}
-                            </div>
-                            <div class="service-details">
-                                <i class="fas fa-calendar me-1"></i>
-                                {{ \Carbon\Carbon::parse($pelayanan->tanggal_pelayanan)->format('d F Y') }}
-                                &nbsp;•&nbsp;
-                                <i class="fas fa-user-tag me-1"></i>
-                                {{ $pelayanan->posisi }}
-                            </div>
-                        </div>
-                        <div class="service-badge 
-                            @if($pelayanan->status_konfirmasi == 'terima') badge-terima
-                            @elseif($pelayanan->status_konfirmasi == 'tolak') badge-tolak
-                            @else badge-belum
-                            @endif">
-                            @if($pelayanan->status_konfirmasi == 'terima')
-                                <i class="fas fa-check me-1"></i>Diterima
-                            @elseif($pelayanan->status_konfirmasi == 'tolak')
-                                <i class="fas fa-times me-1"></i>Ditolak
-                            @else
-                                <i class="fas fa-clock me-1"></i>Menunggu
-                            @endif
-                        </div>
-                    </div>
-                @endforeach
-            </div>
-        </div>
-    @else
-        <div class="service-list">
-            <div class="no-data-message">
-                <i class="fas fa-hand-holding-heart"></i>
-                <h5>Belum Ada Riwayat Pelayanan</h5>
-                <p>{{ $canSelectUser && $selectedUserId ? $anggota->nama : 'Anda' }} belum memiliki riwayat pelayanan Dalam {{ round($startDate->floatDiffInMonths($endDate)) }} bulan terakhir.</p>
-                @if(!$canSelectUser || !$selectedUserId)
-                    <a href="{{ route('pelayanan.index') }}" class="btn btn-success">
-                        <i class="fas fa-plus me-2"></i>Lihat Jadwal Pelayanan
-                    </a>
-                @endif
-            </div>
-        </div>
     @endif
+        
+    <div class="service-list">
+        <div class="card-header bg-light">
+            <h5 class="mb-0">
+                <i class="fas fa-list me-2"></i>Riwayat Pelayanan
+                @if($kegiatan_id || $pelaksanaan_id)
+                    <small class="text-muted">
+                        @if($kegiatan_id)
+                            - {{ $kegiatanList->where('id_kegiatan', $kegiatan_id)->first()->nama_kegiatan ?? 'Kegiatan Tidak Ditemukan' }}
+                        @endif
+                        @if($pelaksanaan_id)
+                            - {{ $pelaksanaanList->where('id_pelaksanaan', $pelaksanaan_id)->first() ? 
+                                \Carbon\Carbon::parse($pelaksanaanList->where('id_pelaksanaan', $pelaksanaan_id)->first()->tanggal_kegiatan)->format('d M Y') : 
+                                'Pelaksanaan Tidak Ditemukan' }}
+                        @endif
+                    </small>
+                @endif
+            </h5>
+        </div>
+        <div class="card-body">
+            @if($jadwalPelayanan->count() > 0)
+                <!-- Export Buttons -->
+                @if(!$canSelectUser || !$selectedUserId)
+                    <div class="export-buttons">
+                        <a href="{{ route('laporan.export', ['jenis' => 'personal-service-report', 'format' => 'pdf']) }}{{ request()->getQueryString() ? '?' . request()->getQueryString() : '' }}" 
+                           class="btn btn-danger btn-sm">
+                            <i class="fas fa-file-pdf me-1"></i>Export PDF
+                        </a>
+                        <a href="{{ route('laporan.export', ['jenis' => 'personal-service-report', 'format' => 'excel']) }}{{ request()->getQueryString() ? '?' . request()->getQueryString() : '' }}" 
+                           class="btn btn-success btn-sm">
+                            <i class="fas fa-file-excel me-1"></i>Export Excel
+                        </a>
+                    </div>
+                @else
+                    <div class="export-buttons">
+                        <a href="{{ route('laporan.export', ['jenis' => 'personal-service-report', 'format' => 'pdf']) }}?user_id={{ $selectedUserId }}&period={{ $period }}{{ $kegiatan_id ? '&kegiatan_id=' . $kegiatan_id : '' }}{{ $pelaksanaan_id ? '&pelaksanaan_id=' . $pelaksanaan_id : '' }}" 
+                           class="btn btn-danger btn-sm">
+                            <i class="fas fa-file-pdf me-1"></i>Export PDF
+                        </a>
+                        <a href="{{ route('laporan.export', ['jenis' => 'personal-service-report', 'format' => 'excel']) }}?user_id={{ $selectedUserId }}&period={{ $period }}{{ $kegiatan_id ? '&kegiatan_id=' . $kegiatan_id : '' }}{{ $pelaksanaan_id ? '&pelaksanaan_id=' . $pelaksanaan_id : '' }}" 
+                           class="btn btn-success btn-sm">
+                            <i class="fas fa-file-excel me-1"></i>Export Excel
+                        </a>
+                    </div>
+                @endif
+                
+                <!-- DataTable -->
+                <div class="table-responsive">
+                    <table id="pelayananTable" class="table table-striped table-hover">
+                        <thead>
+                            <tr>
+                                <th width="120">Tanggal</th>
+                                <th>Kegiatan</th>
+                                <th width="150">Posisi</th>
+                                <th width="120">Status</th>
+                                <th width="100">Waktu</th>
+                                <th width="200">Keterangan</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($jadwalPelayanan as $pelayanan)
+                                <tr>
+                                    <td>{{ \Carbon\Carbon::parse($pelayanan->tanggal_pelayanan)->format('d-m-Y') }}</td>
+                                    <td>
+                                        <strong>{{ $pelayanan->kegiatan->nama_kegiatan ?? 'Kegiatan Tidak Diketahui' }}</strong>
+                                        @if($pelayanan->kegiatan)
+                                            <br><small class="text-muted badge bg-light text-dark">
+                                                {{ ucfirst($pelayanan->kegiatan->tipe_kegiatan) }}
+                                            </small>
+                                        @endif
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-secondary">{{ $pelayanan->posisi ?? 'Tidak Diketahui' }}</span>
+                                    </td>
+                                    <td>
+                                        @switch($pelayanan->status_konfirmasi)
+                                            @case('terima')
+                                                <span class="badge bg-success">
+                                                    <i class="fas fa-check me-1"></i>Diterima
+                                                </span>
+                                                @break
+                                            @case('tolak')
+                                                <span class="badge bg-danger">
+                                                    <i class="fas fa-times me-1"></i>Ditolak
+                                                </span>
+                                                @break
+                                            @case('belum')
+                                                <span class="badge bg-warning text-dark">
+                                                    <i class="fas fa-clock me-1"></i>Menunggu
+                                                </span>
+                                                @break
+                                            @default
+                                                <span class="badge bg-secondary">{{ ucfirst($pelayanan->status_konfirmasi) }}</span>
+                                        @endswitch
+                                    </td>
+                                    <td>
+                                        @if($pelayanan->pelaksanaan)
+                                            <small>
+                                                {{ \Carbon\Carbon::parse($pelayanan->pelaksanaan->jam_mulai)->format('H:i') }} - 
+                                                {{ \Carbon\Carbon::parse($pelayanan->pelaksanaan->jam_selesai)->format('H:i') }}
+                                            </small>
+                                        @else
+                                            <small class="text-muted">-</small>
+                                        @endif
+                                    </td>
+                                    <td>
+                                        <small>{{ $pelayanan->keterangan ?? '-' }}</small>
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            @else
+                <div class="no-data-message">
+                    <i class="fas fa-hand-holding-heart"></i>
+                    <h5>Belum Ada Riwayat Pelayanan</h5>
+                    <p>{{ $canSelectUser && $selectedUserId ? $anggota->nama : 'Anda' }} belum memiliki riwayat pelayanan dalam {{ round($startDate->floatDiffInMonths($endDate)) }} bulan terakhir.</p>
+                    @if(!$canSelectUser || !$selectedUserId)
+                        @if(Route::has('pelayanan.index'))
+                            <a href="{{ route('pelayanan.index') }}" class="btn btn-success">
+                                <i class="fas fa-plus me-2"></i>Lihat Jadwal Pelayanan
+                            </a>
+                        @endif
+                    @endif
+                </div>
+            @endif
+        </div>
+    </div>
 
 </div>
 @endsection
@@ -542,6 +658,29 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Initialize DataTable
+    @if($jadwalPelayanan->count() > 0)
+        const pelayananTable = new simpleDatatables.DataTable("#pelayananTable", {
+            searchable: true,
+            sortable: true,
+            paging: true,
+            perPage: 25,
+            perPageSelect: [10, 25, 50, 100],
+            labels: {
+                placeholder: "Cari kegiatan, posisi, atau status...",
+                perPage: "data per halaman",
+                noRows: "Tidak ada data pelayanan",
+                info: "Menampilkan {start} sampai {end} dari {rows} data",
+                previous: "Sebelumnya",
+                next: "Selanjutnya"
+            },
+            layout: {
+                top: "{select}{search}",
+                bottom: "{info}{pager}"
+            }
+        });
+    @endif
+    
     // Variabel untuk menyimpan instance chart
     let monthlyChart = null;
     let positionChart = null;
@@ -591,7 +730,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 data: {
                     labels: monthlyLabels,
                     datasets: [{
-                        label: 'Pelayanan',
+                        label: 'Pelayanan Diterima',
                         data: monthlyValues,
                         backgroundColor: 'rgba(28, 200, 138, 0.1)',
                         borderColor: 'rgba(28, 200, 138, 1)',
@@ -681,30 +820,35 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     @endif
     
-    // Period selector - only for non-admin users or when no user selected
-    @if(!$canSelectUser || !$selectedUserId)
-        document.querySelectorAll('.period-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
-                // Hancurkan chart sebelum navigasi
-                destroyExistingCharts();
-                
-                const period = this.dataset.period;
-                const url = new URL(window.location);
-                url.searchParams.set('period', period);
-                window.location.href = url.toString();
-            });
-        });
-        
-        // Set active period based on URL parameter
-        const urlParams = new URLSearchParams(window.location.search);
-        const currentPeriod = urlParams.get('period') || '6';
-        
-        document.querySelectorAll('.period-btn').forEach(btn => {
-            btn.classList.remove('active');
-            if (btn.dataset.period === currentPeriod) {
-                btn.classList.add('active');
+    // Dependent dropdown: Pelaksanaan based on Kegiatan
+    const kegiatanSelect = document.getElementById('kegiatan_id');
+    const pelaksanaanSelect = document.getElementById('pelaksanaan_id');
+    
+    if (kegiatanSelect && pelaksanaanSelect) {
+        kegiatanSelect.addEventListener('change', function() {
+            const kegiatanId = this.value;
+            
+            // Clear pelaksanaan options
+            pelaksanaanSelect.innerHTML = '<option value="">-- Semua Pelaksanaan --</option>';
+            
+            if (kegiatanId) {
+                // Auto-submit form to get pelaksanaan data
+                document.getElementById('filterForm').submit();
             }
         });
+    }
+    
+    // Period selector - only for non-admin users or when no user selected
+    @if(!$canSelectUser || !$selectedUserId)
+        const periodSelect = document.getElementById('period');
+        if (periodSelect) {
+            periodSelect.addEventListener('change', function() {
+                // Reset kegiatan and pelaksanaan when changing period
+                if (kegiatanSelect) kegiatanSelect.value = '';
+                if (pelaksanaanSelect) pelaksanaanSelect.innerHTML = '<option value="">-- Semua Pelaksanaan --</option>';
+                document.getElementById('filterForm').submit();
+            });
+        }
     @endif
     
     // Cleanup saat halaman akan ditinggalkan
