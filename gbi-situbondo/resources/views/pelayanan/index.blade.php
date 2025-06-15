@@ -959,14 +959,8 @@
                                         <div class="d-flex justify-content-between align-items-center">
                                             <div>
                                                 <strong>${candidate.nama}</strong>${regularBadge}
-                                                <br><small class="text-muted">Score: ${Math.round(candidate.score)} | ${lastService}</small>
+                                                <br><small class="text-muted">${lastService}</small>
                                                 ${candidate.email ? `<br><small class="text-info"><i class="fas fa-envelope"></i> ${candidate.email}</small>` : ''}
-                                            </div>
-                                            <div class="text-end">
-                                                <small class="text-muted">
-                                                    Rest: ${candidate.rest_days} hari<br>
-                                                    Freq: ${candidate.frequency}x (3bln)
-                                                </small>
                                             </div>
                                         </div>
                                     </label>

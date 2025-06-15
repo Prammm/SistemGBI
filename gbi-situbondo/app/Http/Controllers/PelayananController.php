@@ -1309,8 +1309,11 @@ class PelayananController extends Controller
             'id_anggota' => 'required|exists:anggota,id_anggota',
             'ketersediaan_hari' => 'required|array',
             'ketersediaan_hari.*' => 'required|integer|min:0|max:6',
-            'ketersediaan_jam' => 'required|array',
-            'ketersediaan_jam.*' => 'required|string|regex:/^([0-1][0-9]|2[0-3]):[0-5][0-9]-([0-1][0-9]|2[0-3]):[0-5][0-9]$/',
+            // FIXED: Separate validation for start/end times instead of combined format
+            'ketersediaan_jam_start' => 'required|array',
+            'ketersediaan_jam_start.*' => 'required|date_format:H:i',
+            'ketersediaan_jam_end' => 'required|array',
+            'ketersediaan_jam_end.*' => 'required|date_format:H:i|after:ketersediaan_jam_start.*',
             'blackout_dates' => 'sometimes|array',
             'blackout_dates.*' => 'date',
             'spesialisasi' => 'sometimes|array',
@@ -1336,11 +1339,28 @@ class PelayananController extends Controller
         DB::beginTransaction();
         
         try {
+            // FIXED: Process time slots from start/end arrays
+            $timeSlots = [];
+            $startTimes = $request->ketersediaan_jam_start;
+            $endTimes = $request->ketersediaan_jam_end;
+            
+            if ($startTimes && $endTimes && count($startTimes) === count($endTimes)) {
+                for ($i = 0; $i < count($startTimes); $i++) {
+                    if (!empty($startTimes[$i]) && !empty($endTimes[$i])) {
+                        // Validate that end time is after start time
+                        if ($endTimes[$i] > $startTimes[$i]) {
+                            $timeSlots[] = $startTimes[$i] . '-' . $endTimes[$i];
+                        }
+                    }
+                }
+            }
+            
             // Update availability
             $anggota->update([
                 'ketersediaan_hari' => $request->ketersediaan_hari,
-                'ketersediaan_jam' => $request->ketersediaan_jam,
+                'ketersediaan_jam' => $timeSlots, // Use processed time slots
                 'blackout_dates' => $request->blackout_dates ?? [],
+                'catatan_khusus' => $request->catatan_khusus,
             ]);
             
             // Update specializations

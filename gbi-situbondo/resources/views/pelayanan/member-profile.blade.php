@@ -89,15 +89,6 @@
                         </div>
                     </div>
                     
-                    <div class="mb-3">
-                        <div class="d-flex justify-content-between">
-                            <span>Hari Istirahat Terakhir</span>
-                            <strong>{{ $restDays }} hari</strong>
-                        </div>
-                        <div class="progress" style="height: 5px;">
-                            <div class="progress-bar bg-success" style="width: {{ min(($restDays / 30) * 100, 100) }}%"></div>
-                        </div>
-                    </div>
                     
                     <div class="mb-0">
                         <div class="d-flex justify-content-between">
