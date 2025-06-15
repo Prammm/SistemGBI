@@ -85,22 +85,25 @@
                             </div>
                         </div>
                         
-                        <!-- Management Actions -->
-                        @if(Auth::user()->id_role <= 3)
-                        <div class="col-md-3">
-                            <h6 class="text-success">Manajemen</h6>
-                            <div class="d-grid gap-2">
-                                <a href="{{ route('pelayanan.members') }}" class="btn btn-outline-success btn-sm">
-                                    <i class="fas fa-users"></i> Anggota Pelayanan
-                                </a>
-                                @if(Auth::user()->id_role <= 2)
-                                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="sendNotifications()">
-                                        <i class="fas fa-bell"></i> Kirim Notifikasi
-                                    </button>
-                                @endif
-                            </div>
+                                          <!-- Management Actions -->
+                    @if(Auth::user()->id_role <= 3)
+                    <div class="col-md-3">
+                        <h6 class="text-success">Manajemen</h6>
+                        <div class="d-grid gap-2">
+                            <a href="{{ route('pelayanan.members') }}" class="btn btn-outline-success btn-sm">
+                                <i class="fas fa-users"></i> Anggota Pelayanan
+                            </a>
+                            <a href="{{ route('master.posisi.index') }}" class="btn btn-outline-danger btn-sm">
+                                <i class="fas fa-cogs"></i> Master Posisi
+                            </a>
+                            @if(Auth::user()->id_role <= 2)
+                                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="sendNotifications()">
+                                    <i class="fas fa-bell"></i> Kirim Notifikasi
+                                </button>
+                            @endif
                         </div>
-                        @endif
+                    </div>
+                    @endif
                         
                         
                         <!-- Current Status -->
