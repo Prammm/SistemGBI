@@ -75,14 +75,6 @@ class LaporanController extends Controller
                 'color' => 'anggota'
             ];
             
-            $reports['dashboard'] = [
-                'title' => 'Dashboard Analitik',
-                'description' => 'Melihat ringkasan statistik dan analitik untuk semua aspek kegiatan gereja.',
-                'route' => 'laporan.dashboard',
-                'icon' => 'fa-chart-line',
-                'color' => 'dashboard'
-            ];
-            
             // Personal reports with user selection capability for Admin & Pengurus
             $reports['kehadiran-personal'] = [
                 'title' => 'Kehadiran Pribadi',

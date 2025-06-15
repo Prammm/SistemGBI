@@ -15,6 +15,8 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Carbon\Carbon;
+use Barryvdh\DomPDF\Facade\Pdf as PDF;
+use App\Services\ExcelExportService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 
@@ -787,42 +789,95 @@ class PelayananController extends Controller
 
     public function exportHistory(Request $request)
     {
-        $format = $request->get('format', 'excel');
+        $user = Auth::user();
+        $format = $request->input('format', 'excel'); // excel or pdf
         
-        // Apply same filters as history method
-        $query = JadwalPelayanan::with(['anggota', 'pelaksanaan.kegiatan', 'kegiatan'])
-            ->whereHas('pelaksanaan', function($q) {
-                $q->where('tanggal_kegiatan', '<', Carbon::now()->format('Y-m-d'));
-            })
-            ->orderBy('tanggal_pelayanan', 'desc');
+        // Get the same data as history method
+        $query = JadwalPelayanan::with(['anggota', 'kegiatan', 'pelaksanaan.kegiatan']);
         
         // Apply filters
+        $filters = [];
         if ($request->filled('start_date')) {
-            $query->where('tanggal_pelayanan', '>=', $request->start_date);
+            $query->whereDate('tanggal_pelayanan', '>=', $request->start_date);
+            $filters['start_date'] = $request->start_date;
         }
         
         if ($request->filled('end_date')) {
-            $query->where('tanggal_pelayanan', '<=', $request->end_date);
+            $query->whereDate('tanggal_pelayanan', '<=', $request->end_date);
+            $filters['end_date'] = $request->end_date;
         }
         
         if ($request->filled('posisi')) {
             $query->where('posisi', $request->posisi);
+            $filters['posisi'] = $request->posisi;
         }
         
         if ($request->filled('status')) {
             $query->where('status_konfirmasi', $request->status);
+            $filters['status'] = $request->status;
         }
         
-        $data = $query->get();
-        
-        switch ($format) {
-            case 'pdf':
-                return $this->exportHistoryToPdf($data, $request);
-            case 'excel':
-                return $this->exportHistoryToExcel($data, $request);
-            default:
-                return $this->exportHistoryToExcel($data, $request);
+        // Role-based filtering
+        if ($user->id_role == 4) { // Anggota Jemaat
+            if (!$user->id_anggota) {
+                return redirect()->back()->with('error', 'Profil anggota tidak lengkap.');
+            }
+            $query->where('id_anggota', $user->id_anggota);
+        } elseif ($user->id_role == 3) { // Petugas Pelayanan
+            // Show all for now, can be refined for specific supervision
         }
+        // Admin and Pengurus see all
+        
+        $historyData = $query->orderBy('tanggal_pelayanan', 'desc')->get();
+        
+        // Calculate statistics
+        $statistics = [
+            'total' => $historyData->count(),
+            'accepted' => $historyData->where('status_konfirmasi', 'terima')->count(),
+            'rejected' => $historyData->where('status_konfirmasi', 'tolak')->count(),
+            'pending' => $historyData->where('status_konfirmasi', 'belum')->count(),
+        ];
+        
+        if ($format === 'excel') {
+            return \App\Services\ExcelExportService::exportRiwayatPelayanan($historyData, $filters, $statistics);
+        } else {
+            return $this->exportHistoryToPdf($historyData, $filters, $statistics);
+        }
+    }
+
+    private function exportHistoryToPdf($historyData, $filters, $statistics)
+    {
+        $title = 'Riwayat Pelayanan Lengkap';
+        if (!empty($filters['start_date']) && !empty($filters['end_date'])) {
+            $title .= ' - ' . \Carbon\Carbon::parse($filters['start_date'])->format('d/m/Y') . 
+                    ' s/d ' . \Carbon\Carbon::parse($filters['end_date'])->format('d/m/Y');
+        }
+        
+        $pdf = PDF::loadView('pelayanan.history-pdf', [
+            'historyData' => $historyData,
+            'filters' => $filters,
+            'statistics' => $statistics,
+            'title' => $title,
+            'date' => \Carbon\Carbon::now()->format('d F Y')
+        ]);
+        
+        // Set paper size and orientation
+        $pdf->setPaper('A4', 'landscape');
+        
+        // Generate filename
+        $filename = 'riwayat-pelayanan-lengkap';
+        if (!empty($filters['start_date'])) {
+            $filename .= '-' . \Carbon\Carbon::parse($filters['start_date'])->format('Y-m-d');
+        }
+        if (!empty($filters['end_date'])) {
+            $filename .= '-to-' . \Carbon\Carbon::parse($filters['end_date'])->format('Y-m-d');
+        }
+        if (!empty($filters['posisi'])) {
+            $filename .= '-' . strtolower(str_replace(' ', '-', $filters['posisi']));
+        }
+        $filename .= '.pdf';
+        
+        return $pdf->download($filename);
     }
 
     private function getHistoryChartData($query)

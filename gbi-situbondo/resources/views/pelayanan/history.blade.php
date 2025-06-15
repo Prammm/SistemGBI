@@ -351,34 +351,7 @@
             @endif
         </div>
     </div>
-    
-    <!-- Monthly Statistics Chart -->
-    @if($historyData->isNotEmpty())
-        <div class="row">
-            <div class="col-xl-8">
-                <div class="card mb-4">
-                    <div class="card-header">
-                        <i class="fas fa-chart-line me-1"></i>
-                        Tren Pelayanan Bulanan
-                    </div>
-                    <div class="card-body">
-                        <canvas id="monthlyTrendChart" width="400" height="150"></canvas>
-                    </div>
-                </div>
-            </div>
-            <div class="col-xl-4">
-                <div class="card mb-4">
-                    <div class="card-header">
-                        <i class="fas fa-chart-pie me-1"></i>
-                        Status Distribution
-                    </div>
-                    <div class="card-body">
-                        <canvas id="statusChart" width="400" height="150"></canvas>
-                    </div>
-                </div>
-            </div>
-        </div>
-    @endif
+
 </div>
 
 <!-- Detail Modal -->

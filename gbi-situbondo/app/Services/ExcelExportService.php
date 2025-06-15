@@ -456,4 +456,136 @@ class ExcelExportService
                    '-' . $startDate->format('Y-m-d') . '-to-' . $endDate->format('Y-m-d') . '.xlsx';
         $service->download($filename);
     }
+
+    /**
+     * Export Riwayat Pelayanan (History) data
+     */
+    public static function exportRiwayatPelayanan($historyData, $filters, $statistics)
+    {
+        $service = new static();
+        
+        $title = 'RIWAYAT PELAYANAN LENGKAP';
+        if (!empty($filters['start_date']) && !empty($filters['end_date'])) {
+            $title .= ' - ' . Carbon::parse($filters['start_date'])->format('d/m/Y') . 
+                      ' s/d ' . Carbon::parse($filters['end_date'])->format('d/m/Y');
+        }
+        
+        $service->setProperties('Riwayat Pelayanan')
+            ->addHeader($title);
+        
+        // Add summary section
+        $service->worksheet->setCellValue('A8', 'RINGKASAN STATISTIK');
+        $service->worksheet->getStyle('A8')->getFont()->setBold(true);
+        
+        $service->worksheet->setCellValue('A9', 'Total Riwayat: ' . ($statistics['total'] ?? $historyData->count()));
+        $service->worksheet->setCellValue('A10', 'Diterima: ' . ($statistics['accepted'] ?? 0));
+        $service->worksheet->setCellValue('A11', 'Ditolak: ' . ($statistics['rejected'] ?? 0));
+        $service->worksheet->setCellValue('A12', 'Belum Konfirmasi: ' . ($statistics['pending'] ?? 0));
+        
+        // Applied filters
+        if (!empty($filters)) {
+            $service->worksheet->setCellValue('A14', 'FILTER YANG DITERAPKAN:');
+            $service->worksheet->getStyle('A14')->getFont()->setBold(true);
+            
+            $row = 15;
+            if (!empty($filters['start_date'])) {
+                $service->worksheet->setCellValue('A' . $row, 'Tanggal Mulai: ' . Carbon::parse($filters['start_date'])->format('d/m/Y'));
+                $row++;
+            }
+            if (!empty($filters['end_date'])) {
+                $service->worksheet->setCellValue('A' . $row, 'Tanggal Selesai: ' . Carbon::parse($filters['end_date'])->format('d/m/Y'));
+                $row++;
+            }
+            if (!empty($filters['posisi'])) {
+                $service->worksheet->setCellValue('A' . $row, 'Posisi: ' . $filters['posisi']);
+                $row++;
+            }
+            if (!empty($filters['status'])) {
+                $statusText = '';
+                switch($filters['status']) {
+                    case 'terima': $statusText = 'Diterima'; break;
+                    case 'tolak': $statusText = 'Ditolak'; break;
+                    case 'belum': $statusText = 'Belum Konfirmasi'; break;
+                }
+                $service->worksheet->setCellValue('A' . $row, 'Status: ' . $statusText);
+                $row++;
+            }
+        }
+        
+        // Main data table
+        $dataStartRow = 18;
+        $service->setHeaders([
+            'No', 'Tanggal', 'Hari', 'Kegiatan', 'Waktu', 'Lokasi', 
+            'Posisi', 'Nama Petugas', 'No. Telepon', 'Status', 'Reguler', 
+            'Waktu Dibuat', 'Waktu Update', 'Keterangan'
+        ], $dataStartRow);
+        
+        $exportData = [];
+        foreach ($historyData as $index => $jadwal) {
+            $status = '';
+            switch($jadwal->status_konfirmasi) {
+                case 'terima':
+                    $status = 'Diterima';
+                    break;
+                case 'tolak':
+                    $status = 'Ditolak';
+                    break;
+                case 'belum':
+                    $status = 'Belum Konfirmasi';
+                    break;
+                default:
+                    $status = 'Belum Diketahui';
+            }
+            
+            $isReguler = $jadwal->is_reguler || 
+                        (method_exists($jadwal->anggota, 'isRegularIn') && 
+                         $jadwal->anggota->isRegularIn($jadwal->posisi));
+            
+            // Get activity info
+            $kegiatan = $jadwal->pelaksanaan->kegiatan->nama_kegiatan ?? 
+                       $jadwal->kegiatan->nama_kegiatan ?? 'Tidak Diketahui';
+            
+            $waktu = '';
+            $lokasi = '';
+            if ($jadwal->pelaksanaan) {
+                $waktu = Carbon::parse($jadwal->pelaksanaan->jam_mulai)->format('H:i') . ' - ' . 
+                        Carbon::parse($jadwal->pelaksanaan->jam_selesai)->format('H:i');
+                $lokasi = $jadwal->pelaksanaan->lokasi ?? '-';
+            }
+            
+            $exportData[] = [
+                $index + 1,
+                Carbon::parse($jadwal->tanggal_pelayanan)->format('d/m/Y'),
+                Carbon::parse($jadwal->tanggal_pelayanan)->format('l'),
+                $kegiatan,
+                $waktu,
+                $lokasi,
+                $jadwal->posisi ?? '-',
+                $jadwal->anggota->nama ?? 'Tidak Diketahui',
+                $jadwal->anggota->no_telepon ?? '-',
+                $status,
+                $isReguler ? 'Ya' : 'Tidak',
+                $jadwal->created_at ? Carbon::parse($jadwal->created_at)->format('d/m/Y H:i') : '-',
+                $jadwal->updated_at ? Carbon::parse($jadwal->updated_at)->format('d/m/Y H:i') : '-',
+                $jadwal->keterangan ?? '-'
+            ];
+        }
+        
+        $service->addData($exportData, $dataStartRow + 1);
+        
+        // Generate filename
+        $filename = 'riwayat-pelayanan-lengkap';
+        if (!empty($filters['start_date'])) {
+            $filename .= '-' . Carbon::parse($filters['start_date'])->format('Y-m-d');
+        }
+        if (!empty($filters['end_date'])) {
+            $filename .= '-to-' . Carbon::parse($filters['end_date'])->format('Y-m-d');
+        }
+        if (!empty($filters['posisi'])) {
+            $filename .= '-' . strtolower(str_replace(' ', '-', $filters['posisi']));
+        }
+        $filename .= '.xlsx';
+        
+        $service->download($filename);
+    }
 }

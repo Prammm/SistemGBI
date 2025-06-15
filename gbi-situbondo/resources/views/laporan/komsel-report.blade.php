@@ -592,14 +592,6 @@
                     </div>
                 </div>
             </div>
-            <div class="col-lg-6">
-                <div class="chart-section">
-                    <h5><i class="fas fa-chart-bar me-2"></i>Distribusi Kehadiran Anggota</h5>
-                    <div class="chart-wrapper">
-                        <canvas id="memberDistributionChart"></canvas>
-                    </div>
-                </div>
-            </div>
         </div>
         
         <div class="activities-list">
