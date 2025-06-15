@@ -26,9 +26,11 @@
         <div class="card-header">
             <i class="fas fa-users me-1"></i>
             Daftar Kelompok Sel
-            <a href="{{ route('komsel.create') }}" class="btn btn-primary btn-sm float-end">
-                <i class="fas fa-plus"></i> Tambah Komsel
-            </a>
+            @if(auth()->user()->id_role <= 3)
+                <a href="{{ route('komsel.create') }}" class="btn btn-primary btn-sm float-end">
+                    <i class="fas fa-plus"></i> Tambah Komsel
+                </a>
+            @endif
         </div>
         <div class="card-body">
             <div class="table-responsive">
@@ -63,16 +65,18 @@
                                     <a href="{{ route('komsel.show', $k->id_komsel) }}" class="btn btn-info btn-sm">
                                         <i class="fas fa-eye"></i>
                                     </a>
-                                    <a href="{{ route('komsel.edit', $k->id_komsel) }}" class="btn btn-primary btn-sm">
-                                        <i class="fas fa-edit"></i>
-                                    </a>
-                                    <form action="{{ route('komsel.destroy', $k->id_komsel) }}" method="POST" class="d-inline">
-                                        @csrf
-                                        @method('DELETE')
-                                        <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Apakah Anda yakin ingin menghapus komsel ini?')">
-                                            <i class="fas fa-trash"></i>
-                                        </button>
-                                    </form>
+                                    @if(auth()->user()->id_role <= 3)
+                                        <a href="{{ route('komsel.edit', $k->id_komsel) }}" class="btn btn-primary btn-sm">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                        <form action="{{ route('komsel.destroy', $k->id_komsel) }}" method="POST" class="d-inline">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Apakah Anda yakin ingin menghapus komsel ini?')">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </form>
+                                    @endif
                                 </td>
                             </tr>
                         @endforeach

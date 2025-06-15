@@ -208,49 +208,6 @@
         </div>
     @endif
 
-    @if(Auth::user()->id_role == 4)
-        <div class="card mt-4">
-            <div class="card-header">
-                <i class="fas fa-lightbulb me-2"></i>Tips untuk Anggota Jemaat
-            </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-6">
-                        <h6><i class="fas fa-user-check me-2"></i>Laporan Kehadiran Pribadi</h6>
-                        <p class="small">Pantau riwayat kehadiran Anda pada ibadah umum, komsel, dan kegiatan gereja lainnya dalam berbagai periode.</p>
-                    </div>
-                    @if(Auth::user()->id_anggota)
-                        @php
-                            $anggota = \App\Models\Anggota::find(Auth::user()->id_anggota);
-                            $hasService = \App\Models\JadwalPelayanan::where('id_anggota', $anggota->id_anggota)->exists();
-                            $isKomselLeader = \App\Models\Komsel::where('id_pemimpin', $anggota->id_anggota)->exists();
-                        @endphp
-                        
-                        @if($hasService)
-                            <div class="col-md-6">
-                                <h6><i class="fas fa-hand-holding-heart me-2"></i>Riwayat Pelayanan</h6>
-                                <p class="small">Lihat statistik dan riwayat pelayanan Anda di berbagai kegiatan gereja dengan chart interaktif.</p>
-                            </div>
-                        @endif
-                        
-                        @if($isKomselLeader)
-                            <div class="col-md-6">
-                                <h6><i class="fas fa-users me-2"></i>Laporan Komsel</h6>
-                                <p class="small">Pantau kehadiran dan aktivitas anggota komsel yang Anda pimpin dengan analisis mendalam.</p>
-                            </div>
-                        @endif
-                    @endif
-                </div>
-                
-                @if(!Auth::user()->id_anggota)
-                    <div class="alert alert-warning mt-3">
-                        <i class="fas fa-exclamation-triangle me-2"></i>
-                        <strong>Profil Tidak Lengkap:</strong> Untuk mengakses laporan pribadi, pastikan profil anggota Anda sudah terhubung dengan akun ini. Hubungi administrator untuk bantuan.
-                    </div>
-                @endif
-            </div>
-        </div>
-    @endif
 
 
 

@@ -67,68 +67,72 @@
                     @endif
                 </div>
                 <div class="card-footer">
-                    <a href="{{ route('komsel.edit', $komsel->id_komsel) }}" class="btn btn-primary">
-                        <i class="fas fa-edit"></i> Edit
-                    </a>
-                    <a href="{{ route('komsel.jadwalkan', $komsel->id_komsel) }}" class="btn btn-success">
-                        <i class="fas fa-calendar-plus"></i> Jadwalkan Pertemuan
-                    </a>
+                    @if(auth()->user()->id_role <= 3)
+                        <a href="{{ route('komsel.edit', $komsel->id_komsel) }}" class="btn btn-primary">
+                            <i class="fas fa-edit"></i> Edit
+                        </a>
+                        <a href="{{ route('komsel.jadwalkan', $komsel->id_komsel) }}" class="btn btn-success">
+                            <i class="fas fa-calendar-plus"></i> Jadwalkan Pertemuan
+                        </a>
+                    @endif
                     <a href="{{ route('komsel.index') }}" class="btn btn-secondary">
                         <i class="fas fa-arrow-left"></i> Kembali
                     </a>
                 </div>
             </div>
             
-            <div class="card mb-4">
-                <div class="card-header">
-                    <i class="fas fa-calendar-plus me-1"></i>
-                    Tambah Pertemuan Komsel
-                </div>
-                <div class="card-body">
-                    <form action="{{ route('komsel.tambah-pertemuan', $komsel->id_komsel) }}" method="POST">
-                        @csrf
-                        
-                        <div class="mb-3">
-                            <label for="tanggal_kegiatan" class="form-label">Tanggal Pertemuan</label>
-                            <input type="date" class="form-control @error('tanggal_kegiatan') is-invalid @enderror" id="tanggal_kegiatan" name="tanggal_kegiatan" value="{{ old('tanggal_kegiatan') }}" required>
-                            @error('tanggal_kegiatan')
-                                <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
-                        </div>
-                        
-                        <div class="row mb-3">
-                            <div class="col-md-6">
-                                <label for="jam_mulai" class="form-label">Jam Mulai</label>
-                                <input type="time" class="form-control @error('jam_mulai') is-invalid @enderror" id="jam_mulai" name="jam_mulai" value="{{ old('jam_mulai', substr($komsel->jam_mulai, 0, 5)) }}" required>
-                                @error('jam_mulai')
+            @if(auth()->user()->id_role <= 3)
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <i class="fas fa-calendar-plus me-1"></i>
+                        Tambah Pertemuan Komsel
+                    </div>
+                    <div class="card-body">
+                        <form action="{{ route('komsel.tambah-pertemuan', $komsel->id_komsel) }}" method="POST">
+                            @csrf
+                            
+                            <div class="mb-3">
+                                <label for="tanggal_kegiatan" class="form-label">Tanggal Pertemuan</label>
+                                <input type="date" class="form-control @error('tanggal_kegiatan') is-invalid @enderror" id="tanggal_kegiatan" name="tanggal_kegiatan" value="{{ old('tanggal_kegiatan') }}" required>
+                                @error('tanggal_kegiatan')
                                     <div class="invalid-feedback">{{ $message }}</div>
                                 @enderror
                             </div>
-                            <div class="col-md-6">
-                                <label for="jam_selesai" class="form-label">Jam Selesai</label>
-                                <input type="time" class="form-control @error('jam_selesai') is-invalid @enderror" id="jam_selesai" name="jam_selesai" value="{{ old('jam_selesai', substr($komsel->jam_selesai, 0, 5)) }}" required>
-                                @error('jam_selesai')
+                            
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label for="jam_mulai" class="form-label">Jam Mulai</label>
+                                    <input type="time" class="form-control @error('jam_mulai') is-invalid @enderror" id="jam_mulai" name="jam_mulai" value="{{ old('jam_mulai', substr($komsel->jam_mulai, 0, 5)) }}" required>
+                                    @error('jam_mulai')
+                                        <div class="invalid-feedback">{{ $message }}</div>
+                                    @enderror
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="jam_selesai" class="form-label">Jam Selesai</label>
+                                    <input type="time" class="form-control @error('jam_selesai') is-invalid @enderror" id="jam_selesai" name="jam_selesai" value="{{ old('jam_selesai', substr($komsel->jam_selesai, 0, 5)) }}" required>
+                                    @error('jam_selesai')
+                                        <div class="invalid-feedback">{{ $message }}</div>
+                                    @enderror
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="lokasi" class="form-label">Lokasi</label>
+                                <input type="text" class="form-control @error('lokasi') is-invalid @enderror" id="lokasi" name="lokasi" value="{{ old('lokasi', $komsel->lokasi) }}">
+                                @error('lokasi')
                                     <div class="invalid-feedback">{{ $message }}</div>
                                 @enderror
                             </div>
-                        </div>
-                        
-                        <div class="mb-3">
-                            <label for="lokasi" class="form-label">Lokasi</label>
-                            <input type="text" class="form-control @error('lokasi') is-invalid @enderror" id="lokasi" name="lokasi" value="{{ old('lokasi', $komsel->lokasi) }}">
-                            @error('lokasi')
-                                <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
-                        </div>
-                        
-                        <div class="mb-3">
-                            <button type="submit" class="btn btn-primary">
-                                <i class="fas fa-plus"></i> Tambah Pertemuan
-                            </button>
-                        </div>
-                    </form>
+                            
+                            <div class="mb-3">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-plus"></i> Tambah Pertemuan
+                                </button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
-            </div>
+            @endif
         </div>
         
         <div class="col-xl-6">
@@ -170,11 +174,13 @@
                         <p class="text-center">Belum ada anggota dalam kelompok sel ini.</p>
                     @endif
                 </div>
-                <div class="card-footer">
-                    <a href="{{ route('komsel.edit', $komsel->id_komsel) }}" class="btn btn-primary">
-                        <i class="fas fa-users-cog"></i> Kelola Anggota
-                    </a>
-                </div>
+                @if(auth()->user()->id_role <= 3)
+                    <div class="card-footer">
+                        <a href="{{ route('komsel.edit', $komsel->id_komsel) }}" class="btn btn-primary">
+                            <i class="fas fa-users-cog"></i> Kelola Anggota
+                        </a>
+                    </div>
+                @endif
             </div>
             
             <div class="card mb-4">
@@ -192,7 +198,9 @@
                                         <th>Waktu</th>
                                         <th>Lokasi</th>
                                         <th>Kehadiran</th>
-                                        <th>Aksi</th>
+                                        @if(auth()->user()->id_role <= 3)
+                                            <th>Aksi</th>
+                                        @endif
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -205,11 +213,13 @@
                                             </td>
                                             <td>{{ $p->lokasi ?: '-' }}</td>
                                             <td>{{ $p->kehadiran->count() }} orang</td>
-                                            <td>
-                                                <a href="{{ route('komsel.absensi', $p->id_pelaksanaan) }}" class="btn btn-success btn-sm">
-                                                    <i class="fas fa-clipboard-check"></i> Presensi
-                                                </a>
-                                            </td>
+                                            @if(auth()->user()->id_role <= 3)
+                                                <td>
+                                                    <a href="{{ route('komsel.absensi', $p->id_pelaksanaan) }}" class="btn btn-success btn-sm">
+                                                        <i class="fas fa-clipboard-check"></i> Presensi
+                                                    </a>
+                                                </td>
+                                            @endif
                                         </tr>
                                     @endforeach
                                 </tbody>

@@ -30,9 +30,11 @@
                 <a href="{{ route('kegiatan.calendar') }}" class="btn btn-info btn-sm ">
                     <i class="fas fa-calendar-alt"></i> Tampilan Kalender
                 </a>
-                <a href="{{ route('pelaksanaan.create') }}" class="btn btn-primary btn-sm">
-                    <i class="fas fa-plus"></i> Tambah Jadwal
-                </a>
+                @if(auth()->user()->id_role <= 3)
+                    <a href="{{ route('pelaksanaan.create') }}" class="btn btn-primary btn-sm">
+                        <i class="fas fa-plus"></i> Tambah Jadwal
+                    </a>
+                @endif
             </div>
         </div>
         <div class="card-body">
@@ -45,7 +47,9 @@
                             <th>Waktu</th>
                             <th>Lokasi</th>
                             <th>Status</th>
-                            <th style="width: 150px;">Aksi</th>
+                            @if(auth()->user()->id_role <= 3)
+                                <th style="width: 150px;">Aksi</th>
+                            @endif
                         </tr>
                     </thead>
                     <tbody>
@@ -108,102 +112,104 @@
                                         </span>
                                     @endif
                                 </td>
-                                <td>
-                                    <div class="btn-group" role="group">
-                                        <a href="{{ route('pelaksanaan.show', $p->id_pelaksanaan) }}" 
-                                           class="btn btn-info btn-sm" title="Lihat Detail">
-                                            <i class="fas fa-eye"></i>
-                                        </a>
-                                        <a href="{{ route('pelaksanaan.edit', $p->id_pelaksanaan) }}" 
-                                           class="btn btn-warning btn-sm" title="Edit">
-                                            <i class="fas fa-edit"></i>
-                                        </a>
-                                        <a href="{{ route('kehadiran.create', ['id_pelaksanaan' => $p->id_pelaksanaan]) }}" 
-                                           class="btn btn-success btn-sm" title="Presensi">
-                                            <i class="fas fa-clipboard-check"></i>
-                                        </a>
-                                    </div>
-                                    
-                                    <div class="btn-group mt-1" role="group">
-                                        @if($p->is_recurring)
-                                            <!-- Dropdown for recurring schedules -->
-                                            <div class="btn-group" role="group">
-                                                <button type="button" class="btn btn-danger btn-sm dropdown-toggle" 
-                                                        data-bs-toggle="dropdown" aria-expanded="false" title="Hapus">
-                                                    <i class="fas fa-trash"></i>
-                                                </button>
-                                                <ul class="dropdown-menu">
-                                                    <li>
-                                                        <form action="{{ route('pelaksanaan.destroy', $p->id_pelaksanaan) }}" 
-                                                              method="POST" class="d-inline">
-                                                            @csrf
-                                                            @method('DELETE')
-                                                            <button type="submit" class="dropdown-item text-warning" 
-                                                                    onclick="return confirm('Apakah Anda yakin ingin menghapus jadwal ini saja?')">
-                                                                <i class="fas fa-calendar-minus"></i> Hapus Jadwal Ini Saja
-                                                            </button>
-                                                        </form>
-                                                    </li>
-                                                    <li>
-                                                        <form action="{{ route('pelaksanaan.destroy-series', $p->id_pelaksanaan) }}" 
-                                                              method="POST" class="d-inline">
-                                                            @csrf
-                                                            @method('DELETE')
-                                                            <button type="submit" class="dropdown-item text-danger" 
-                                                                    onclick="return confirm('Apakah Anda yakin ingin menghapus SELURUH seri jadwal berulang ini?')">
-                                                                <i class="fas fa-trash-alt"></i> Hapus Seluruh Seri
-                                                            </button>
-                                                        </form>
-                                                    </li>
-                                                </ul>
-                                            </div>
-                                        @elseif($p->parent_id)
-                                            <!-- For child recurring schedules -->
-                                            <div class="btn-group" role="group">
-                                                <button type="button" class="btn btn-danger btn-sm dropdown-toggle" 
-                                                        data-bs-toggle="dropdown" aria-expanded="false" title="Hapus">
-                                                    <i class="fas fa-trash"></i>
-                                                </button>
-                                                <ul class="dropdown-menu">
-                                                    <li>
-                                                        <form action="{{ route('pelaksanaan.destroy', $p->id_pelaksanaan) }}" 
-                                                              method="POST" class="d-inline">
-                                                            @csrf
-                                                            @method('DELETE')
-                                                            <button type="submit" class="dropdown-item text-warning" 
-                                                                    onclick="return confirm('Apakah Anda yakin ingin menghapus jadwal ini saja?')">
-                                                                <i class="fas fa-calendar-minus"></i> Hapus Jadwal Ini Saja
-                                                            </button>
-                                                        </form>
-                                                    </li>
-                                                    <li>
-                                                        <form action="{{ route('pelaksanaan.destroy-series', $p->id_pelaksanaan) }}" 
-                                                              method="POST" class="d-inline">
-                                                            @csrf
-                                                            @method('DELETE')
-                                                            <button type="submit" class="dropdown-item text-danger" 
-                                                                    onclick="return confirm('Apakah Anda yakin ingin menghapus SELURUH seri jadwal berulang ini?')">
-                                                                <i class="fas fa-trash-alt"></i> Hapus Seluruh Seri
-                                                            </button>
-                                                        </form>
-                                                    </li>
-                                                </ul>
-                                            </div>
-                                        @else
-                                            <!-- For single schedules -->
-                                            <form action="{{ route('pelaksanaan.destroy', $p->id_pelaksanaan) }}" 
-                                                  method="POST" class="d-inline">
-                                                @csrf
-                                                @method('DELETE')
-                                                <button type="submit" class="btn btn-danger btn-sm" 
-                                                        onclick="return confirm('Apakah Anda yakin ingin menghapus jadwal ini?')"
-                                                        title="Hapus">
-                                                    <i class="fas fa-trash"></i>
-                                                </button>
-                                            </form>
-                                        @endif
-                                    </div>
-                                </td>
+                                @if(auth()->user()->id_role <= 3)
+                                    <td>
+                                        <div class="btn-group" role="group">
+                                            <a href="{{ route('pelaksanaan.show', $p->id_pelaksanaan) }}" 
+                                               class="btn btn-info btn-sm" title="Lihat Detail">
+                                                <i class="fas fa-eye"></i>
+                                            </a>
+                                            <a href="{{ route('pelaksanaan.edit', $p->id_pelaksanaan) }}" 
+                                               class="btn btn-warning btn-sm" title="Edit">
+                                                <i class="fas fa-edit"></i>
+                                            </a>
+                                            <a href="{{ route('kehadiran.create', ['id_pelaksanaan' => $p->id_pelaksanaan]) }}" 
+                                               class="btn btn-success btn-sm" title="Presensi">
+                                                <i class="fas fa-clipboard-check"></i>
+                                            </a>
+                                        </div>
+                                        
+                                        <div class="btn-group mt-1" role="group">
+                                            @if($p->is_recurring)
+                                                <!-- Dropdown for recurring schedules -->
+                                                <div class="btn-group" role="group">
+                                                    <button type="button" class="btn btn-danger btn-sm dropdown-toggle" 
+                                                            data-bs-toggle="dropdown" aria-expanded="false" title="Hapus">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                    <ul class="dropdown-menu">
+                                                        <li>
+                                                            <form action="{{ route('pelaksanaan.destroy', $p->id_pelaksanaan) }}" 
+                                                                  method="POST" class="d-inline">
+                                                                @csrf
+                                                                @method('DELETE')
+                                                                <button type="submit" class="dropdown-item text-warning" 
+                                                                        onclick="return confirm('Apakah Anda yakin ingin menghapus jadwal ini saja?')">
+                                                                    <i class="fas fa-calendar-minus"></i> Hapus Jadwal Ini Saja
+                                                                </button>
+                                                            </form>
+                                                        </li>
+                                                        <li>
+                                                            <form action="{{ route('pelaksanaan.destroy-series', $p->id_pelaksanaan) }}" 
+                                                                  method="POST" class="d-inline">
+                                                                @csrf
+                                                                @method('DELETE')
+                                                                <button type="submit" class="dropdown-item text-danger" 
+                                                                        onclick="return confirm('Apakah Anda yakin ingin menghapus SELURUH seri jadwal berulang ini?')">
+                                                                    <i class="fas fa-trash-alt"></i> Hapus Seluruh Seri
+                                                                </button>
+                                                            </form>
+                                                        </li>
+                                                    </ul>
+                                                </div>
+                                            @elseif($p->parent_id)
+                                                <!-- For child recurring schedules -->
+                                                <div class="btn-group" role="group">
+                                                    <button type="button" class="btn btn-danger btn-sm dropdown-toggle" 
+                                                            data-bs-toggle="dropdown" aria-expanded="false" title="Hapus">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                    <ul class="dropdown-menu">
+                                                        <li>
+                                                            <form action="{{ route('pelaksanaan.destroy', $p->id_pelaksanaan) }}" 
+                                                                  method="POST" class="d-inline">
+                                                                @csrf
+                                                                @method('DELETE')
+                                                                <button type="submit" class="dropdown-item text-warning" 
+                                                                        onclick="return confirm('Apakah Anda yakin ingin menghapus jadwal ini saja?')">
+                                                                    <i class="fas fa-calendar-minus"></i> Hapus Jadwal Ini Saja
+                                                                </button>
+                                                            </form>
+                                                        </li>
+                                                        <li>
+                                                            <form action="{{ route('pelaksanaan.destroy-series', $p->id_pelaksanaan) }}" 
+                                                                  method="POST" class="d-inline">
+                                                                @csrf
+                                                                @method('DELETE')
+                                                                <button type="submit" class="dropdown-item text-danger" 
+                                                                        onclick="return confirm('Apakah Anda yakin ingin menghapus SELURUH seri jadwal berulang ini?')">
+                                                                    <i class="fas fa-trash-alt"></i> Hapus Seluruh Seri
+                                                                </button>
+                                                            </form>
+                                                        </li>
+                                                    </ul>
+                                                </div>
+                                            @else
+                                                <!-- For single schedules -->
+                                                <form action="{{ route('pelaksanaan.destroy', $p->id_pelaksanaan) }}" 
+                                                      method="POST" class="d-inline">
+                                                    @csrf
+                                                    @method('DELETE')
+                                                    <button type="submit" class="btn btn-danger btn-sm" 
+                                                            onclick="return confirm('Apakah Anda yakin ingin menghapus jadwal ini?')"
+                                                            title="Hapus">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </form>
+                                            @endif
+                                        </div>
+                                    </td>
+                                @endif
                             </tr>
                         @endforeach
                     </tbody>
