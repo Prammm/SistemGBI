@@ -290,7 +290,7 @@
                                             <div class="form-check form-switch">
                                                 <input class="form-check-input" type="checkbox" name="spesialisasi[{{ $loop->index }}][is_reguler]" value="1" {{ $spec->is_reguler ? 'checked' : '' }}>
                                                 <label class="form-check-label">
-                                                    <span class="regular-label">{{ $spec->is_reguler ? 'Reguler' : 'Kadang-kadang' }}</span>
+                                                    <span class="regular-label">{{ $spec->is_reguler ? 'Reguler' : 'Tidak Reguler' }}</span>
                                                 </label>
                                             </div>
                                         </div>
@@ -417,7 +417,7 @@
         // Regular toggle handler
         $(document).on('change', '.form-check-input[name*="is_reguler"]', function() {
             const label = $(this).closest('.form-check').find('.regular-label');
-            label.text($(this).is(':checked') ? 'Reguler' : 'Kadang-kadang');
+            label.text($(this).is(':checked') ? 'Reguler' : 'Tidak Reguler');
         });
         
         // Quick actions
@@ -518,7 +518,7 @@
                         <div class="form-check form-switch">
                             <input class="form-check-input" type="checkbox" name="spesialisasi[${specializationIndex}][is_reguler]" value="1">
                             <label class="form-check-label">
-                                <span class="regular-label">Kadang-kadang</span>
+                                <span class="regular-label">Tidak Reguler</span>
                             </label>
                         </div>
                     </div>

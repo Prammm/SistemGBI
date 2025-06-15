@@ -309,14 +309,16 @@ class NotifikasiController extends Controller
                 ->with('error', 'Anda tidak memiliki akses untuk mengirim pengingat.');
         }
         
+        // PERBAIKAN 1: Ambil parameter date dari request, atau gunakan default yang benar
+        $date = $request->get('date'); // Dari parameter request
         $when = $request->get('when', 'day_before');
-        $date = $request->get('date'); // Optional specific date
         
         try {
-            // Calculate target date
+            // PERBAIKAN 2: Hitung target date dengan benar
             if ($date) {
                 $targetDate = Carbon::parse($date);
             } else {
+                // Jika tidak ada date parameter, gunakan logika when
                 switch ($when) {
                     case 'week_before':
                         $targetDate = Carbon::now()->addWeek();
@@ -331,85 +333,90 @@ class NotifikasiController extends Controller
                 }
             }
             
-            // Get jadwal pelayanan for target date
-            $jadwalPelayanan = JadwalPelayanan::with(['anggota', 'pelaksanaan.kegiatan'])
+            Log::info("SendPelayananReminders called", [
+                'user' => Auth::user()->email,
+                'request_date' => $date,
+                'when' => $when,
+                'calculated_target_date' => $targetDate->format('Y-m-d'),
+                'today' => Carbon::now()->format('Y-m-d')
+            ]);
+            
+            // PERBAIKAN 3: Cek jadwal yang ada dengan tanggal yang benar
+            $jadwalCount = JadwalPelayanan::with(['anggota'])
                 ->where('tanggal_pelayanan', $targetDate->format('Y-m-d'))
                 ->where('status_konfirmasi', 'belum')
-                ->get();
+                ->whereHas('anggota', function($q) {
+                    $q->whereNotNull('email');
+                })
+                ->count();
             
-            if ($jadwalPelayanan->isEmpty()) {
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Tidak ada jadwal pelayanan yang perlu dikonfirmasi untuk tanggal ' . $targetDate->format('d/m/Y')
-                ]);
-            }
+            Log::info("Jadwal pelayanan check", [
+                'target_date' => $targetDate->format('Y-m-d'),
+                'count_found' => $jadwalCount
+            ]);
             
-            $sentCount = 0;
-            $failedCount = 0;
-            
-            foreach ($jadwalPelayanan as $jadwal) {
-                if (!$jadwal->anggota || !$jadwal->anggota->email) {
-                    $failedCount++;
-                    continue;
+            if ($jadwalCount == 0) {
+                $message = 'Tidak ada jadwal pelayanan yang perlu dikonfirmasi untuk tanggal ' . $targetDate->format('d/m/Y');
+                
+                if ($request->expectsJson()) {
+                    return response()->json([
+                        'success' => true,
+                        'message' => $message,
+                        'debug_info' => [
+                            'target_date' => $targetDate->format('Y-m-d'),
+                            'today' => Carbon::now()->format('Y-m-d'),
+                            'when' => $when
+                        ]
+                    ]);
                 }
                 
-                try {
-                    // Send email directly using Mail facade
-                    Mail::to($jadwal->anggota->email)
-                        ->send(new \App\Mail\PelayananReminder($jadwal, $when));
-                    
-                    $sentCount++;
-                    
-                    Log::info("Pelayanan reminder sent successfully", [
-                        'jadwal_id' => $jadwal->id_pelayanan,
-                        'email' => $jadwal->anggota->email,
-                        'anggota' => $jadwal->anggota->nama
-                    ]);
-                } catch (\Exception $e) {
-                    $failedCount++;
-                    Log::error("Failed to send pelayanan reminder", [
-                        'jadwal_id' => $jadwal->id_pelayanan,
-                        'email' => $jadwal->anggota->email,
-                        'error' => $e->getMessage()
-                    ]);
-                }
+                return redirect()->route('notifikasi.index')->with('info', $message);
             }
             
-            $message = "Pengingat pelayanan berhasil dikirim ke {$sentCount} anggota";
-            if ($failedCount > 0) {
-                $message .= ". {$failedCount} email gagal dikirim.";
-            }
+            // PERBAIKAN 4: Dispatch job dengan parameter yang benar
+            \App\Jobs\SendPelayananReminders::dispatch($targetDate->format('Y-m-d'), $when)
+                ->onQueue('notifications');
             
-            // Return JSON for AJAX or redirect for form submission
+            Log::info("Pelayanan reminders job dispatched", [
+                'target_date' => $targetDate->format('Y-m-d'),
+                'when' => $when,
+                'jadwal_count' => $jadwalCount,
+                'user' => Auth::user()->email
+            ]);
+            
+            $message = "Pengingat pelayanan sedang dikirim ke {$jadwalCount} anggota untuk tanggal " . $targetDate->format('d/m/Y') . ". Proses akan selesai dalam beberapa menit.";
+            
             if ($request->expectsJson()) {
                 return response()->json([
                     'success' => true,
                     'message' => $message,
-                    'sent_count' => $sentCount,
-                    'failed_count' => $failedCount
+                    'estimated_count' => $jadwalCount
                 ]);
             }
             
-            return redirect()->route('pelayanan.index')->with('success', $message);
+            return redirect()->route('notifikasi.index')->with('success', $message);
             
         } catch (\Exception $e) {
-            Log::error("Failed to send pelayanan reminders", [
+            Log::error("Failed to dispatch pelayanan reminders", [
                 'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
                 'user' => Auth::user()->email,
-                'when' => $when
+                'request_data' => $request->all()
             ]);
+            
+            $errorMessage = 'Terjadi kesalahan saat memproses pengingat pelayanan: ' . $e->getMessage();
             
             if ($request->expectsJson()) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Terjadi kesalahan saat mengirim pengingat: ' . $e->getMessage()
+                    'message' => $errorMessage
                 ], 500);
             }
             
-            return redirect()->route('pelayanan.index')
-                ->with('error', 'Terjadi kesalahan saat mengirim pengingat pelayanan: ' . $e->getMessage());
+            return redirect()->route('notifikasi.index')->with('error', $errorMessage);
         }
     }
+
     
     public function sendKomselReminders(Request $request)
     {
@@ -418,11 +425,10 @@ class NotifikasiController extends Controller
                 ->with('error', 'Anda tidak memiliki akses untuk mengirim pengingat.');
         }
         
-        $when = $request->get('when', 'day_before');
         $date = $request->get('date');
+        $when = $request->get('when', 'day_before');
         
         try {
-            // Calculate target date
             if ($date) {
                 $targetDate = Carbon::parse($date);
             } else {
@@ -440,89 +446,57 @@ class NotifikasiController extends Controller
                 }
             }
             
-            // Get komsel events for target date
-            $komselEvents = PelaksanaanKegiatan::with(['kegiatan'])
-                ->whereHas('kegiatan', function($q) {
+            // Cek ada event komsel atau tidak
+            $komselCount = PelaksanaanKegiatan::whereHas('kegiatan', function($q) {
                     $q->where('tipe_kegiatan', 'komsel');
                 })
                 ->where('tanggal_kegiatan', $targetDate->format('Y-m-d'))
-                ->get();
+                ->count();
             
-            if ($komselEvents->isEmpty()) {
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Tidak ada pertemuan komsel untuk tanggal ' . $targetDate->format('d/m/Y')
-                ]);
-            }
-            
-            $sentCount = 0;
-            $failedCount = 0;
-            
-            foreach ($komselEvents as $event) {
-                $komselName = str_replace('Komsel - ', '', $event->kegiatan->nama_kegiatan);
-                $komsel = \App\Models\Komsel::where('nama_komsel', $komselName)->first();
+            if ($komselCount == 0) {
+                $message = 'Tidak ada pertemuan komsel untuk tanggal ' . $targetDate->format('d/m/Y');
                 
-                if (!$komsel) continue;
-                
-                foreach ($komsel->anggota as $anggota) {
-                    if (!$anggota->email) {
-                        $failedCount++;
-                        continue;
-                    }
-                    
-                    try {
-                        Mail::to($anggota->email)
-                            ->send(new \App\Mail\KomselReminder($event, $komsel, $anggota, $when));
-                        
-                        $sentCount++;
-                        
-                        Log::info("Komsel reminder sent successfully", [
-                            'event_id' => $event->id_pelaksanaan,
-                            'email' => $anggota->email,
-                            'komsel' => $komselName
-                        ]);
-                    } catch (\Exception $e) {
-                        $failedCount++;
-                        Log::error("Failed to send komsel reminder", [
-                            'event_id' => $event->id_pelaksanaan,
-                            'email' => $anggota->email,
-                            'error' => $e->getMessage()
-                        ]);
-                    }
+                if ($request->expectsJson()) {
+                    return response()->json([
+                        'success' => true,
+                        'message' => $message
+                    ]);
                 }
+                
+                return redirect()->route('notifikasi.index')->with('info', $message);
             }
             
-            $message = "Pengingat komsel berhasil dikirim ke {$sentCount} anggota";
-            if ($failedCount > 0) {
-                $message .= ". {$failedCount} email gagal dikirim.";
-            }
+            // Dispatch job
+            \App\Jobs\SendKomselReminders::dispatch($targetDate->format('Y-m-d'), $when)
+                ->onQueue('notifications');
+            
+            $message = "Pengingat komsel sedang dikirim untuk tanggal " . $targetDate->format('d/m/Y') . ". Proses akan selesai dalam beberapa menit.";
             
             if ($request->expectsJson()) {
                 return response()->json([
                     'success' => true,
-                    'message' => $message,
-                    'sent_count' => $sentCount,
-                    'failed_count' => $failedCount
+                    'message' => $message
                 ]);
             }
             
             return redirect()->route('notifikasi.index')->with('success', $message);
             
         } catch (\Exception $e) {
-            Log::error("Failed to send komsel reminders", [
+            Log::error("Failed to dispatch komsel reminders", [
                 'error' => $e->getMessage(),
                 'user' => Auth::user()->email
             ]);
             
+            $errorMessage = 'Terjadi kesalahan saat memproses pengingat komsel: ' . $e->getMessage();
+            
             if ($request->expectsJson()) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Terjadi kesalahan saat mengirim pengingat komsel: ' . $e->getMessage()
+                    'message' => $errorMessage
                 ], 500);
             }
             
-            return redirect()->route('notifikasi.index')
-                ->with('error', 'Terjadi kesalahan saat mengirim pengingat komsel: ' . $e->getMessage());
+            return redirect()->route('notifikasi.index')->with('error', $errorMessage);
         }
     }
     
@@ -533,11 +507,10 @@ class NotifikasiController extends Controller
                 ->with('error', 'Anda tidak memiliki akses untuk mengirim pengingat.');
         }
         
-        $when = $request->get('when', 'day_before');
         $date = $request->get('date');
+        $when = $request->get('when', 'day_before');
         
         try {
-            // Calculate target date
             if ($date) {
                 $targetDate = Carbon::parse($date);
             } else {
@@ -555,88 +528,57 @@ class NotifikasiController extends Controller
                 }
             }
             
-            // Get ibadah events for target date
-            $ibadahEvents = PelaksanaanKegiatan::with(['kegiatan'])
-                ->whereHas('kegiatan', function($q) {
+            // Cek ada event ibadah atau tidak
+            $ibadahCount = PelaksanaanKegiatan::whereHas('kegiatan', function($q) {
                     $q->where('tipe_kegiatan', 'ibadah');
                 })
                 ->where('tanggal_kegiatan', $targetDate->format('Y-m-d'))
-                ->get();
+                ->count();
             
-            if ($ibadahEvents->isEmpty()) {
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Tidak ada ibadah untuk tanggal ' . $targetDate->format('d/m/Y')
-                ]);
-            }
-            
-            // Get all anggota with email
-            $anggota = \App\Models\Anggota::whereNotNull('email')->get();
-            
-            if ($anggota->isEmpty()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Tidak ada anggota dengan email yang terdaftar'
-                ]);
-            }
-            
-            $sentCount = 0;
-            $failedCount = 0;
-            
-            foreach ($ibadahEvents as $event) {
-                foreach ($anggota as $member) {
-                    try {
-                        Mail::to($member->email)
-                            ->send(new \App\Mail\IbadahReminder($event, $member, $when));
-                        
-                        $sentCount++;
-                        
-                        Log::info("Ibadah reminder sent successfully", [
-                            'event_id' => $event->id_pelaksanaan,
-                            'email' => $member->email
-                        ]);
-                    } catch (\Exception $e) {
-                        $failedCount++;
-                        Log::error("Failed to send ibadah reminder", [
-                            'event_id' => $event->id_pelaksanaan,
-                            'email' => $member->email,
-                            'error' => $e->getMessage()
-                        ]);
-                    }
+            if ($ibadahCount == 0) {
+                $message = 'Tidak ada ibadah untuk tanggal ' . $targetDate->format('d/m/Y');
+                
+                if ($request->expectsJson()) {
+                    return response()->json([
+                        'success' => true,
+                        'message' => $message
+                    ]);
                 }
+                
+                return redirect()->route('notifikasi.index')->with('info', $message);
             }
             
-            $message = "Pengingat ibadah berhasil dikirim ke {$sentCount} anggota";
-            if ($failedCount > 0) {
-                $message .= ". {$failedCount} email gagal dikirim.";
-            }
+            // Dispatch job
+            \App\Jobs\SendIbadahReminders::dispatch($targetDate->format('Y-m-d'), $when)
+                ->onQueue('notifications');
+            
+            $message = "Pengingat ibadah sedang dikirim untuk tanggal " . $targetDate->format('d/m/Y') . ". Proses akan selesai dalam beberapa menit.";
             
             if ($request->expectsJson()) {
                 return response()->json([
                     'success' => true,
-                    'message' => $message,
-                    'sent_count' => $sentCount,
-                    'failed_count' => $failedCount
+                    'message' => $message
                 ]);
             }
             
             return redirect()->route('notifikasi.index')->with('success', $message);
             
         } catch (\Exception $e) {
-            Log::error("Failed to send ibadah reminders", [
+            Log::error("Failed to dispatch ibadah reminders", [
                 'error' => $e->getMessage(),
                 'user' => Auth::user()->email
             ]);
             
+            $errorMessage = 'Terjadi kesalahan saat memproses pengingat ibadah: ' . $e->getMessage();
+            
             if ($request->expectsJson()) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Terjadi kesalahan saat mengirim pengingat ibadah: ' . $e->getMessage()
+                    'message' => $errorMessage
                 ], 500);
             }
             
-            return redirect()->route('notifikasi.index')
-                ->with('error', 'Terjadi kesalahan saat mengirim pengingat ibadah: ' . $e->getMessage());
+            return redirect()->route('notifikasi.index')->with('error', $errorMessage);
         }
     }
     

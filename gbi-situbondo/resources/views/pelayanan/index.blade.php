@@ -714,11 +714,67 @@
     function sendNotifications() {
         if (confirm('Kirim notifikasi reminder ke semua anggota yang belum konfirmasi?')) {
             
-            // Show loading state
             const button = event.target;
             const originalText = button.innerHTML;
             button.disabled = true;
-            button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Mengirim...';
+            button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Memproses...';
+            
+            // PERBAIKAN: Gunakan tanggal besok, bukan 7 hari ke depan
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1); // BESOK, bukan +7
+            const formattedDate = tomorrow.toISOString().split('T')[0];
+            
+            console.log('Sending notification for date:', formattedDate);
+            
+            fetch('{{ route("pelayanan.send-notifications") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    when: 'day_before',
+                    date: formattedDate // Kirim tanggal besok
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                button.disabled = false;
+                button.innerHTML = originalText;
+                
+                if (data.success) {
+                    alert('✓ ' + data.message);
+                    if (data.debug_info) {
+                        console.log('Debug info:', data.debug_info);
+                    }
+                } else {
+                    alert('✗ ' + (data.message || 'Gagal mengirim notifikasi'));
+                }
+            })
+            .catch(error => {
+                button.disabled = false;
+                button.innerHTML = originalText;
+                console.error('Error:', error);
+                alert('✗ Terjadi kesalahan: ' + error.message);
+            });
+        }
+    }
+
+    function sendNotificationsWithDate(targetDate = null) {
+        // Jika tidak ada target date, gunakan 7 hari ke depan
+        if (!targetDate) {
+            const date = new Date();
+            date.setDate(date.getDate() + 7);
+            targetDate = date.toISOString().split('T')[0];
+        }
+        
+        if (confirm(`Kirim notifikasi reminder untuk tanggal ${targetDate}?`)) {
+            
+            const button = event.target;
+            const originalText = button.innerHTML;
+            button.disabled = true;
+            button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Memproses...';
             
             fetch('{{ route("notifikasi.send-pelayanan") }}', {
                 method: 'POST',
@@ -728,34 +784,52 @@
                     'Accept': 'application/json'
                 },
                 body: JSON.stringify({
-                    when: 'day_before', // atau bisa diambil dari input user
-                    date: '{{ now()->addDays(7)->format("Y-m-d") }}' // 7 hari ke depan
+                    when: 'day_before',
+                    date: targetDate
                 })
             })
             .then(response => response.json())
             .then(data => {
-                // Reset button state
                 button.disabled = false;
                 button.innerHTML = originalText;
                 
                 if (data.success) {
                     alert('✓ ' + data.message);
-                    
-                    // Optional: Show detailed info
-                    if (data.sent_count && data.failed_count) {
-                        console.log(`Sent: ${data.sent_count}, Failed: ${data.failed_count}`);
-                    }
                 } else {
                     alert('✗ ' + (data.message || 'Gagal mengirim notifikasi'));
                 }
             })
             .catch(error => {
-                // Reset button state
                 button.disabled = false;
                 button.innerHTML = originalText;
                 
                 console.error('Error:', error);
-                alert('✗ Terjadi kesalahan saat mengirim notifikasi. Silakan coba lagi.');
+                alert('✗ Terjadi kesalahan: ' + error.message);
+            });
+        }
+    }
+
+    function debugCheckSchedules() {
+        const targetDate = prompt("Masukkan tanggal target (YYYY-MM-DD):", new Date().toISOString().split('T')[0]);
+        
+        if (targetDate) {
+            fetch('/api/debug/check-schedules', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                },
+                body: JSON.stringify({
+                    date: targetDate
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Schedule check result:', data);
+                alert(`Ditemukan ${data.count || 0} jadwal untuk tanggal ${targetDate}`);
+            })
+            .catch(error => {
+                console.error('Error:', error);
             });
         }
     }
