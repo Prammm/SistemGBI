@@ -69,26 +69,6 @@
                 </div>
             </div>
             
-            <!-- Quick Actions -->
-            <div class="card mb-4">
-                <div class="card-header">
-                    <i class="fas fa-bolt me-1"></i>
-                    Quick Actions
-                </div>
-                <div class="card-body">
-                    <div class="d-grid gap-2">
-                        <button type="button" class="btn btn-outline-success btn-sm" id="set-full-availability">
-                            <i class="fas fa-calendar-check"></i> Set Full Available
-                        </button>
-                        <button type="button" class="btn btn-outline-warning btn-sm" id="set-weekend-only">
-                            <i class="fas fa-calendar-week"></i> Weekend Only
-                        </button>
-                        <button type="button" class="btn btn-outline-danger btn-sm" id="clear-all">
-                            <i class="fas fa-times"></i> Clear All
-                        </button>
-                    </div>
-                </div>
-            </div>
         </div>
         
         <!-- Main Form -->

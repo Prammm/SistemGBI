@@ -438,24 +438,6 @@
                 </div>
             </div>
         </div>
-        <div class="col-xl-3 col-md-6">
-            <div class="card bg-info text-white mb-4">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <div class="small">Perlu Dijadwalkan</div>
-                            <div class="fs-4 fw-bold">{{ $data['members_need_scheduling'] }}</div>
-                            <div class="small">anggota</div>
-                        </div>
-                        <div class="fs-1 opacity-50"><i class="fas fa-calendar-plus"></i></div>
-                    </div>
-                </div>
-                <div class="card-footer d-flex align-items-center justify-content-between">
-                    <a class="small text-white stretched-link" href="{{ route('pelayanan.members') }}">Lihat Anggota</a>
-                    <div class="small text-white"><i class="fas fa-angle-right"></i></div>
-                </div>
-            </div>
-        </div>
     </div>
 
     @if($data['pending_services_detail']->count() > 0)
