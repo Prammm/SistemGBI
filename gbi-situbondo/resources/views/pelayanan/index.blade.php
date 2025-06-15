@@ -280,8 +280,14 @@
                                                             ->where('replacement_status', 'pending')
                                                             ->exists();
                                                         $rowClass = '';
+                                                        
                                                         if ($jadwal->status_konfirmasi === 'tolak') {
-                                                            $rowClass = Auth::user()->id_role <= 3 ? 'table-danger' : 'table-warning';
+                                                            // Different styling based on user role
+                                                            if (Auth::user()->id_role <= 3) {
+                                                                $rowClass = 'table-danger border-danger'; // Red for staff - needs attention
+                                                            } else {
+                                                                $rowClass = 'table-warning'; // Yellow for members
+                                                            }
                                                         } elseif ($hasReplacement) {
                                                             $rowClass = 'table-warning';
                                                         } elseif ($jadwal->status_konfirmasi === 'belum') {
@@ -291,7 +297,7 @@
                                                         }
                                                     @endphp
                                                     
-                                                    <tr class="{{ $rowClass }}">
+                                                    <tr class="{{ $rowClass }} {{ $jadwal->status_konfirmasi === 'tolak' && Auth::user()->id_role <= 3 ? 'needs-attention' : '' }}">
                                                         <td>
                                                             <span class="badge bg-secondary">{{ $jadwal->posisi }}</span>
                                                             @if($hasReplacement)
@@ -346,29 +352,49 @@
                                                         </td>
                                                         <td>
                                                             <div class="btn-group btn-group-sm">
-                                                                @if(Auth::user()->id_role <= 3 || (Auth::user()->id_anggota && Auth::user()->id_anggota == $jadwal->id_anggota))
+                                                                @php
+                                                                    $canManageAll = Auth::user()->id_role <= 3;
+                                                                    $isOwnSchedule = Auth::user()->id_anggota && Auth::user()->id_anggota == $jadwal->id_anggota;
+                                                                    $isRejectedByMember = $jadwal->status_konfirmasi == 'tolak' && !$canManageAll;
+                                                                @endphp
+                                                                
+                                                                @if($canManageAll || $isOwnSchedule)
                                                                     @if($jadwal->status_konfirmasi == 'belum')
+                                                                        <!-- Accept/Reject buttons for pending schedules -->
                                                                         <button type="button" class="btn btn-success" onclick="confirmSchedule({{ $jadwal->id_pelayanan }}, 'terima')" title="Terima">
                                                                             <i class="fas fa-check"></i>
                                                                         </button>
                                                                         <button type="button" class="btn btn-danger" onclick="confirmSchedule({{ $jadwal->id_pelayanan }}, 'tolak')" title="Tolak">
                                                                             <i class="fas fa-times"></i>
                                                                         </button>
-                                                                    @elseif($jadwal->status_konfirmasi == 'tolak' && Auth::user()->id_role <= 3)
-                                                                        <button type="button" class="btn btn-primary btn-sm" onclick="findReplacement(null, {{ $jadwal->id_pelayanan }})" data-bs-toggle="modal" data-bs-target="#replacementModal">
-                                                                            <i class="fas fa-user-plus"></i> Cari Pengganti
+                                                                    @elseif($jadwal->status_konfirmasi == 'terima' && $isOwnSchedule)
+                                                                        <!-- Allow member to change their mind if they accepted -->
+                                                                        <button type="button" class="btn btn-warning btn-sm" onclick="confirmSchedule({{ $jadwal->id_pelayanan }}, 'tolak')" title="Batalkan">
+                                                                            <i class="fas fa-undo"></i> Batalkan
                                                                         </button>
                                                                     @endif
                                                                     
-                                                                    @if(Auth::user()->id_role <= 3)
-                                                                        <button type="button" class="btn btn-outline-secondary" onclick="changeAssignee({{ $jadwal->id_pelayanan }})" title="Ganti Petugas">
-                                                                            <i class="fas fa-exchange-alt"></i>
-                                                                        </button>
-                                                                        <button type="button" class="btn btn-danger" onclick="deleteSchedule({{ $jadwal->id_pelayanan }})" title="Hapus">
+                                                                    <!-- Management actions (only for petugas+) -->
+                                                                    @if($canManageAll)
+                                                                        @if($jadwal->status_konfirmasi == 'tolak')
+                                                                            <!-- Special styling for rejected schedules -->
+                                                                            <button type="button" class="btn btn-primary btn-sm" onclick="showChangeAssigneeModal({{ $jadwal->id_pelayanan }})" title="Ganti Petugas">
+                                                                                <i class="fas fa-user-plus"></i> Cari Pengganti
+                                                                            </button>
+                                                                        @else
+                                                                            <!-- Regular change assignee button -->
+                                                                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="showChangeAssigneeModal({{ $jadwal->id_pelayanan }})" title="Ganti Petugas">
+                                                                                <i class="fas fa-exchange-alt"></i>
+                                                                            </button>
+                                                                        @endif
+                                                                        
+                                                                        <!-- Delete button -->
+                                                                        <button type="button" class="btn btn-outline-danger btn-sm" onclick="deleteSchedule({{ $jadwal->id_pelayanan }})" title="Hapus">
                                                                             <i class="fas fa-trash"></i>
                                                                         </button>
                                                                     @endif
                                                                 @else
+                                                                    <!-- Read-only for non-members -->
                                                                     <span class="text-muted">-</span>
                                                                 @endif
                                                             </div>
@@ -486,6 +512,68 @@
         </div>
     </div>
 </div>
+
+<style>
+.needs-attention {
+    animation: pulse-red 2s infinite;
+    box-shadow: 0 0 10px rgba(220, 53, 69, 0.5);
+}
+
+@keyframes pulse-red {
+    0% { box-shadow: 0 0 10px rgba(220, 53, 69, 0.5); }
+    50% { box-shadow: 0 0 20px rgba(220, 53, 69, 0.8); }
+    100% { box-shadow: 0 0 10px rgba(220, 53, 69, 0.5); }
+}
+
+.table-danger.needs-attention {
+    background-color: rgba(220, 53, 69, 0.1) !important;
+    border-left: 4px solid #dc3545;
+}
+</style>
+
+<div class="modal fade" id="changeAssigneeModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Ganti Petugas Pelayanan</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="changeAssigneeModalBody">
+                <div class="text-center">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p>Mencari kandidat pengganti...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if(Auth::user()->id_role <= 3)
+    @php
+        $rejectedSchedules = $jadwalPelayanan->flatten()->filter(function($jadwal) {
+            return $jadwal->status_konfirmasi === 'tolak';
+        });
+    @endphp
+    
+    @if($rejectedSchedules->isNotEmpty())
+        <div class="alert alert-danger alert-dismissible fade show" id="rejected-schedules-alert">
+            <i class="fas fa-exclamation-triangle"></i>
+            <strong>Perhatian!</strong> Ada {{ $rejectedSchedules->count() }} jadwal yang ditolak dan membutuhkan perhatian.
+            <ul class="mt-2 mb-0">
+                @foreach($rejectedSchedules->take(3) as $rejected)
+                    <li>{{ $rejected->anggota->nama }} - {{ $rejected->posisi }} ({{ \Carbon\Carbon::parse($rejected->tanggal_pelayanan)->format('d/m/Y') }})</li>
+                @endforeach
+                @if($rejectedSchedules->count() > 3)
+                    <li><em>dan {{ $rejectedSchedules->count() - 3 }} lainnya...</em></li>
+                @endif
+            </ul>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    @endif
+@endif
+
 @endsection
 
 @section('scripts')
@@ -807,6 +895,162 @@
                 alert('✗ Terjadi kesalahan: ' + error.message);
             });
         }
+    }
+
+
+    function showChangeAssigneeModal(jadwalId) {
+        const modalBody = document.getElementById('changeAssigneeModalBody');
+        modalBody.innerHTML = `
+            <div class="text-center">
+                <div class="spinner-border" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p>Mencari kandidat pengganti...</p>
+            </div>
+        `;
+        
+        // Show modal
+        const modal = new bootstrap.Modal(document.getElementById('changeAssigneeModal'));
+        modal.show();
+        
+        // Fetch replacement candidates
+        fetch(`/pelayanan/api/find-replacement-for-change/${jadwalId}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.candidates.length > 0) {
+                    let html = `
+                        <div class="mb-3">
+                            <h6>Informasi Jadwal:</h6>
+                            <div class="alert alert-info">
+                                <strong>${data.schedule_info.kegiatan}</strong><br>
+                                ${data.schedule_info.tanggal} | ${data.schedule_info.jam}<br>
+                                Posisi: <span class="badge bg-primary">${data.schedule_info.posisi}</span>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <h6>Petugas Saat Ini:</h6>
+                            <div class="alert alert-warning">
+                                <i class="fas fa-user"></i> ${data.current_assignee.nama}
+                            </div>
+                        </div>
+                        
+                        <form id="changeAssigneeForm">
+                            <input type="hidden" name="jadwal_id" value="${jadwalId}">
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Pilih Pengganti:</label>
+                                <div class="list-group" style="max-height: 300px; overflow-y: auto;">
+                    `;
+                    
+                    data.candidates.forEach((candidate, index) => {
+                        const regularBadge = candidate.is_reguler ? '<span class="badge bg-success ms-1">Reguler</span>' : '';
+                        const lastService = candidate.last_service ? 
+                            `Terakhir: ${new Date(candidate.last_service).toLocaleDateString('id-ID')}` : 
+                            'Belum pernah';
+                        
+                        html += `
+                            <div class="list-group-item">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="new_assignee_id" 
+                                        value="${candidate.id_anggota}" id="candidate${index}"
+                                        ${index === 0 ? 'checked' : ''}>
+                                    <label class="form-check-label w-100" for="candidate${index}">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <strong>${candidate.nama}</strong>${regularBadge}
+                                                <br><small class="text-muted">Score: ${Math.round(candidate.score)} | ${lastService}</small>
+                                                ${candidate.email ? `<br><small class="text-info"><i class="fas fa-envelope"></i> ${candidate.email}</small>` : ''}
+                                            </div>
+                                            <div class="text-end">
+                                                <small class="text-muted">
+                                                    Rest: ${candidate.rest_days} hari<br>
+                                                    Freq: ${candidate.frequency}x (3bln)
+                                                </small>
+                                            </div>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    
+                    html += `
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Alasan Penggantian:</label>
+                                <textarea class="form-control" name="reason" rows="2" placeholder="Jelaskan alasan penggantian..." required></textarea>
+                            </div>
+                            <div class="d-flex justify-content-end gap-2">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                                <button type="button" class="btn btn-primary" onclick="executeChangeAssignee()">Ganti Petugas</button>
+                            </div>
+                        </form>
+                    `;
+                    
+                    modalBody.innerHTML = html;
+                } else {
+                    modalBody.innerHTML = `
+                        <div class="text-center py-4">
+                            <i class="fas fa-user-times fa-3x text-muted mb-3"></i>
+                            <h5>Tidak Ada Kandidat</h5>
+                            <p class="text-muted">Tidak ditemukan anggota yang tersedia untuk menggantikan posisi ini.</p>
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
+                        </div>
+                    `;
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                modalBody.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        Terjadi kesalahan saat mencari kandidat pengganti.
+                    </div>
+                `;
+            });
+    }
+
+    function executeChangeAssignee() {
+        const form = document.getElementById('changeAssigneeForm');
+        const formData = new FormData(form);
+        
+        // Disable button
+        const button = event.target;
+        const originalText = button.innerHTML;
+        button.disabled = true;
+        button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Memproses...';
+        
+        fetch('/pelayanan/api/change-assignee', {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                jadwal_id: formData.get('jadwal_id'),
+                new_assignee_id: formData.get('new_assignee_id'),
+                reason: formData.get('reason')
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('✓ Petugas berhasil diganti!');
+                location.reload();
+            } else {
+                alert('✗ Gagal mengganti petugas: ' + (data.message || 'Terjadi kesalahan'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('✗ Terjadi kesalahan saat mengganti petugas');
+        })
+        .finally(() => {
+            button.disabled = false;
+            button.innerHTML = originalText;
+        });
     }
 
     function debugCheckSchedules() {

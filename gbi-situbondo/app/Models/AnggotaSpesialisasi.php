@@ -1,5 +1,4 @@
 <?php
-// App/Models/AnggotaSpesialisasi.php
 
 namespace App\Models;
 
@@ -30,78 +29,32 @@ class AnggotaSpesialisasi extends Model
         return $this->belongsTo(Anggota::class, 'id_anggota', 'id_anggota');
     }
     
+    public function masterPosisi()
+    {
+        return $this->belongsTo(MasterPosisiPelayanan::class, 'posisi', 'nama_posisi');
+    }
+    
     /**
-     * Get all available positions
+     * Get all available positions from master table
      */
     public static function getAvailablePositions()
     {
-        return [
-            'Worship Leader',
-            'Singer',
-            'Keyboard',
-            'Guitar',
-            'Bass',
-            'Drum',
-            'Sound System',
-            'Multimedia',
-            'Usher',
-            'Pembaca Alkitab',
-            'Pembawa Persembahan',
-            'Dokumentasi',
-        ];
+        return MasterPosisiPelayanan::getActivePositions();
     }
     
     /**
-     * Get positions by category
+     * Get positions by category from master table
      */
     public static function getPositionsByCategory()
     {
-        return [
-            'Musik' => [
-                'Worship Leader',
-                'Singer',
-                'Keyboard',
-                'Guitar',
-                'Bass',
-                'Drum',
-            ],
-            'Teknis' => [
-                'Sound System',
-                'Multimedia',
-                'Dokumentasi',
-            ],
-            'Pelayanan' => [
-                'Usher',
-                'Pembaca Alkitab',
-                'Pembawa Persembahan',
-            ],
-        ];
+        return MasterPosisiPelayanan::getActivePositionsByCategory();
     }
     
     /**
-     * Get workload score for position
+     * Get workload score for position from master table
      */
     public static function getWorkloadScore($posisi)
     {
-        $workloadScores = [
-            'Worship Leader' => 5,
-            'Singer' => 3,
-            'Keyboard' => 4,
-            'Guitar' => 4,
-            'Bass' => 4,
-            'Drum' => 4,
-            'Sound System' => 3,
-            'Multimedia' => 2,
-            'Usher' => 2,
-            'Liturgos' => 3,
-            'Pembaca Alkitab' => 2,
-            'Pembawa Persembahan' => 2,
-            'Dokumentasi' => 2,
-            'Security' => 1,
-            'Cleaning Service' => 1,
-            'Dekorasi' => 2,
-        ];
-        
-        return $workloadScores[$posisi] ?? 1;
+        return MasterPosisiPelayanan::getWorkloadScore($posisi);
     }
 }

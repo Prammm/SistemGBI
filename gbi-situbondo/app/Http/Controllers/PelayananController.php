@@ -10,6 +10,7 @@ use App\Models\PelaksanaanKegiatan;
 use App\Models\AnggotaSpesialisasi;
 use App\Models\SchedulingHistory;
 use App\Models\JadwalPelayananReplacement;
+use App\Models\MasterPosisiPelayanan;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
@@ -148,8 +149,14 @@ class PelayananController extends Controller
             ->where('id_pelaksanaan', $pelaksanaan->id_pelaksanaan)
             ->get();
             
-        // Get available positions
-        $posisiOptions = AnggotaSpesialisasi::getAvailablePositions();
+        // Get available positions from master table
+        $posisiOptions = MasterPosisiPelayanan::getActivePositions();
+        
+        // IMPROVEMENT: If editing existing schedule, only show positions that are already assigned
+        if ($existingJadwal->isNotEmpty()) {
+            $assignedPositions = $existingJadwal->pluck('posisi')->unique()->toArray();
+            $posisiOptions = $assignedPositions; // Only show assigned positions for editing
+        }
         
         // Get all upcoming pelaksanaan
         $allPelaksanaan = PelaksanaanKegiatan::with('kegiatan')
@@ -301,47 +308,227 @@ class PelayananController extends Controller
                 ->with('error', 'Status konfirmasi tidak valid.');
         }
         
-        DB::beginTransaction();
-        
         try {
             $jadwal->status_konfirmasi = $status;
             $jadwal->save();
             
-            // If rejected, trigger auto-replacement system
-            if ($status === 'tolak') {
-                $replacement = JadwalPelayananReplacement::createRequest(
-                    $jadwal->id_pelayanan,
-                    $jadwal->id_anggota,
-                    'tolak',
-                    $user->id,
-                    'Anggota menolak jadwal pelayanan'
-                );
-                
-                // Auto-find replacement if user is Petugas+ level
-                if ($user->id_role <= 3) {
-                    $this->autoFindReplacement($replacement);
-                }
-                
-                // Send notification to relevant personnel
-                $this->sendReplacementNotification($replacement);
-            }
-            
-            DB::commit();
+            // Log activity for tracking
+            Log::info("Schedule {$status} by user {$user->id} for jadwal {$jadwal->id_pelayanan}");
             
             $message = $status === 'terima' 
                 ? 'Jadwal pelayanan berhasil diterima.' 
-                : 'Jadwal pelayanan ditolak. Tim akan mencari pengganti.';
+                : 'Jadwal pelayanan ditolak. Petugas akan mencari pengganti.';
                 
             return redirect()->route('pelayanan.index')->with('success', $message);
             
         } catch (\Exception $e) {
-            DB::rollback();
             Log::error('Error confirming schedule: ' . $e->getMessage());
             
             return redirect()->route('pelayanan.index')
                 ->with('error', 'Terjadi kesalahan saat mengkonfirmasi jadwal.');
         }
     }
+
+    /**
+    * Find replacement candidates for change assignee
+    */
+    public function findReplacementForChange($jadwalId)
+    {
+        try {
+            $jadwal = JadwalPelayanan::with(['pelaksanaan', 'anggota'])->findOrFail($jadwalId);
+            
+            $posisi = $jadwal->posisi;
+            $eventDate = $jadwal->pelaksanaan->tanggal_kegiatan;
+            $eventStart = $jadwal->pelaksanaan->jam_mulai;
+            $eventEnd = $jadwal->pelaksanaan->jam_selesai;
+            $eventDay = Carbon::parse($eventDate)->dayOfWeek;
+            
+            // Find available candidates
+            $candidates = Anggota::with(['spesialisasi'])
+                ->whereHas('spesialisasi', function($q) use ($posisi) {
+                    $q->where('posisi', $posisi);
+                })
+                ->where('id_anggota', '!=', $jadwal->id_anggota) // Exclude current assignee
+                ->get()
+                ->filter(function($anggota) use ($eventDate, $eventStart, $eventEnd, $jadwal) {
+                    // Check availability
+                    if (!$anggota->isAvailable($eventDate, $eventStart, $eventEnd)) {
+                        return false;
+                    }
+                    
+                    // Check if not already scheduled for this pelaksanaan
+                    $alreadyScheduled = JadwalPelayanan::where('id_pelaksanaan', $jadwal->id_pelaksanaan)
+                        ->where('id_anggota', $anggota->id_anggota)
+                        ->exists();
+                    
+                    return !$alreadyScheduled;
+                })
+                ->map(function($anggota) use ($posisi) {
+                    $spec = $anggota->spesialisasi->where('posisi', $posisi)->first();
+                    return [
+                        'id_anggota' => $anggota->id_anggota,
+                        'nama' => $anggota->nama,
+                        'email' => $anggota->email,
+                        'no_telepon' => $anggota->no_telepon,
+                        'is_reguler' => $spec ? $spec->is_reguler : false,
+                        'prioritas' => $spec ? $spec->prioritas : 0,
+                        'last_service' => $anggota->getLastServiceDate($posisi),
+                        'rest_days' => $anggota->getRestDays($posisi),
+                        'frequency' => $anggota->getServiceFrequency(3, $posisi),
+                        'score' => $this->calculateReplacementScore($anggota, $posisi)
+                    ];
+                })
+                ->sortByDesc('score')
+                ->values();
+            
+            return response()->json([
+                'success' => true,
+                'candidates' => $candidates,
+                'current_assignee' => [
+                    'id_anggota' => $jadwal->anggota->id_anggota,
+                    'nama' => $jadwal->anggota->nama
+                ],
+                'schedule_info' => [
+                    'kegiatan' => $jadwal->pelaksanaan->kegiatan->nama_kegiatan,
+                    'tanggal' => Carbon::parse($jadwal->tanggal_pelayanan)->format('d F Y'),
+                    'jam' => Carbon::parse($jadwal->pelaksanaan->jam_mulai)->format('H:i') . ' - ' . 
+                            Carbon::parse($jadwal->pelaksanaan->jam_selesai)->format('H:i'),
+                    'posisi' => $jadwal->posisi
+                ]
+            ]);
+            
+        } catch (\Exception $e) {
+            Log::error('Error finding replacement candidates: ' . $e->getMessage());
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal mencari kandidat pengganti'
+            ], 500);
+        }
+    }
+
+    /**
+    * Execute assignee change
+    */
+    public function changeAssignee(Request $request)
+    {
+        if (Auth::user()->id_role > 3) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Tidak memiliki akses'
+            ], 403);
+        }
+        
+        $validator = Validator::make($request->all(), [
+            'jadwal_id' => 'required|exists:jadwal_pelayanan,id_pelayanan',
+            'new_assignee_id' => 'required|exists:anggota,id_anggota',
+            'reason' => 'required|string|max:500'
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'errors' => $validator->errors()
+            ], 422);
+        }
+        
+        DB::beginTransaction();
+        
+        try {
+            $jadwal = JadwalPelayanan::findOrFail($request->jadwal_id);
+            $oldAssigneeId = $jadwal->id_anggota;
+            $newAssigneeId = $request->new_assignee_id;
+            
+            // Create replacement tracking record
+            $replacement = JadwalPelayananReplacement::create([
+                'id_jadwal_pelayanan' => $jadwal->id_pelayanan,
+                'original_assignee_id' => $oldAssigneeId,
+                'replacement_id' => $newAssigneeId,
+                'replacement_reason' => 'manual_change',
+                'replacement_status' => 'assigned',
+                'notes' => $request->reason,
+                'requested_at' => now(),
+                'resolved_at' => now(),
+                'requested_by' => Auth::id()
+            ]);
+            
+            // Update the schedule
+            $jadwal->update([
+                'id_anggota' => $newAssigneeId,
+                'status_konfirmasi' => 'belum' // Reset confirmation
+            ]);
+            
+            DB::commit();
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Petugas berhasil diganti'
+            ]);
+            
+        } catch (\Exception $e) {
+            DB::rollback();
+            Log::error('Error changing assignee: ' . $e->getMessage());
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Terjadi kesalahan saat mengganti petugas'
+            ], 500);
+        }
+    }
+
+    /**
+    * Calculate replacement score for candidates
+    */
+    private function calculateReplacementScore($anggota, $posisi)
+    {
+        $score = 0;
+        
+        // Regular bonus
+        if ($anggota->isRegularIn($posisi)) {
+            $score += 50;
+        }
+        
+        // Priority bonus
+        $score += $anggota->getPriorityFor($posisi) * 5;
+        
+        // Rest days bonus
+        $restDays = $anggota->getRestDays($posisi);
+        $score += min($restDays / 7, 30);
+        
+        // Frequency penalty
+        $frequency = $anggota->getServiceFrequency(3, $posisi);
+        $score -= $frequency * 10;
+        
+        return max(0, $score);
+    }
+
+    /**
+    * Auto-reject expired schedules (to be called by scheduled job)
+    */
+    public function autoRejectExpiredSchedules()
+    {
+        $expiredSchedules = JadwalPelayanan::where('status_konfirmasi', 'belum')
+            ->where('tanggal_pelayanan', '<', Carbon::now()->format('Y-m-d'))
+            ->get();
+        
+        $rejectedCount = 0;
+        
+        foreach ($expiredSchedules as $jadwal) {
+            $jadwal->update(['status_konfirmasi' => 'tolak']);
+            
+            // Log the auto-rejection
+            Log::info("Auto-rejected expired schedule: {$jadwal->id_pelayanan}");
+            
+            $rejectedCount++;
+        }
+        
+        if ($rejectedCount > 0) {
+            Log::info("Auto-rejected {$rejectedCount} expired schedules");
+        }
+        
+        return $rejectedCount;
+    }
+
 
     private function autoFindReplacement($replacement)
     {

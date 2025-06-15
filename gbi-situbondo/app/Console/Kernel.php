@@ -12,6 +12,13 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule): void
     {
+
+        $schedule->command('pelayanan:auto-reject-expired')
+                 ->dailyAt('08:00')
+                 ->withoutOverlapping()
+                 ->runInBackground()
+                 ->appendOutputTo(storage_path('logs/auto-reject.log'));
+
         // Check consecutive absences daily at 6 AM
         $schedule->command('notification:check-absences --threshold=3')
             ->dailyAt('06:00')

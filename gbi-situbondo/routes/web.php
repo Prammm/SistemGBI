@@ -467,6 +467,37 @@ Route::middleware(['auth'])->group(function () {
     });
 });
 
+Route::middleware(['auth', 'permission:manage_system'])->group(function () {
+    Route::prefix('master/posisi')->name('master.posisi.')->group(function () {
+        Route::get('/', [App\Http\Controllers\MasterPosisiController::class, 'index'])->name('index');
+        Route::post('/', [App\Http\Controllers\MasterPosisiController::class, 'store'])->name('store');
+        Route::put('/{id}', [App\Http\Controllers\MasterPosisiController::class, 'update'])->name('update');
+        Route::delete('/{id}', [App\Http\Controllers\MasterPosisiController::class, 'destroy'])->name('destroy');
+        Route::post('/{id}/toggle-status', [App\Http\Controllers\MasterPosisiController::class, 'toggleStatus'])->name('toggle-status');
+    });
+});
+
+// Public API for positions (used in forms)
+Route::get('/api/master-posisi/positions', [App\Http\Controllers\MasterPosisiController::class, 'getPositions'])
+    ->name('api.master-posisi.positions');
+
+// Enhanced Pelayanan API routes
+Route::middleware(['auth'])->prefix('pelayanan/api')->name('pelayanan.api.')->group(function () {
+    // Change assignee endpoints (Petugas+ only)
+    Route::middleware(['permission:edit_pelayanan'])->group(function () {
+        Route::get('/find-replacement-for-change/{jadwal_id}', [App\Http\Controllers\PelayananController::class, 'findReplacementForChange'])
+            ->name('find-replacement-for-change');
+        Route::post('/change-assignee', [App\Http\Controllers\PelayananController::class, 'changeAssignee'])
+            ->name('change-assignee');
+    });
+    
+    // Auto-reject endpoint (Admin only)
+    Route::middleware(['permission:manage_system'])->group(function () {
+        Route::post('/auto-reject-expired', [App\Http\Controllers\PelayananController::class, 'autoRejectExpiredSchedules'])
+            ->name('auto-reject-expired');
+    });
+});
+
 // Helper function - MOVED OUTSIDE routes
 if (!function_exists('canAccessFeature')) {
     function canAccessFeature($feature, $user = null) {

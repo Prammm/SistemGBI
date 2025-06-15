@@ -64,85 +64,164 @@
                         <div class="card mb-4">
                             <div class="card-header bg-primary text-white">
                                 <h5 class="mb-0">Tim Pelayanan</h5>
+                                
+                                @if($existingJadwal->isNotEmpty())
+                                    <small class="text-light">
+                                        <i class="fas fa-info-circle"></i> Mode Edit: Menampilkan posisi yang sudah dijadwalkan
+                                    </small>
+                                @endif
                             </div>
                             <div class="card-body">
                                 <div id="petugas-container">
-                                    @foreach($posisiOptions as $posisi)
-                                        <div class="row mb-3 petugas-row">
-                                            <div class="col-md-3">
-                                                <div class="form-group">
-                                                    <label class="form-label">Posisi</label>
-                                                    <input type="text" class="form-control" name="petugas[{{ $loop->index }}][posisi]" value="{{ $posisi }}" readonly>
+                                    @if($existingJadwal->isNotEmpty())
+                                        {{-- Load existing schedule data --}}
+                                        @foreach($existingJadwal as $jadwal)
+                                            <div class="row mb-3 petugas-row">
+                                                <div class="col-md-3">
+                                                    <div class="form-group">
+                                                        <label class="form-label">Posisi</label>
+                                                        <input type="text" class="form-control" name="petugas[{{ $loop->index }}][posisi]" value="{{ $jadwal->posisi }}" readonly>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                            <div class="col-md-7">
-                                                <div class="form-group">
-                                                    <label class="form-label">Anggota</label>
-                                                    <select class="form-select anggota-select" name="petugas[{{ $loop->index }}][id_anggota]" data-posisi="{{ $posisi }}">
-                                                        <option value="">-- Pilih Anggota --</option>
-                                                        @foreach($anggota as $a)
-                                                            @php
-                                                                // Default to available if no availability settings
-                                                                $isAvailable = true;
-                                                                $eventDay = \Carbon\Carbon::parse($pelaksanaan->tanggal_kegiatan)->dayOfWeek;
-                                                                $eventStart = $pelaksanaan->jam_mulai;
-                                                                $eventEnd = $pelaksanaan->jam_selesai;
-                                                                
-                                                                // Only check availability if both day and time restrictions are set
-                                                                if (!empty($a->ketersediaan_hari) || !empty($a->ketersediaan_jam)) {
-                                                                    // If day restrictions exist, check them
-                                                                    if (!empty($a->ketersediaan_hari)) {
-                                                                        if (!in_array($eventDay, $a->ketersediaan_hari)) {
-                                                                            $isAvailable = false;
+                                                <div class="col-md-7">
+                                                    <div class="form-group">
+                                                        <label class="form-label">Anggota</label>
+                                                        <select class="form-select anggota-select" name="petugas[{{ $loop->index }}][id_anggota]" data-posisi="{{ $jadwal->posisi }}">
+                                                            <option value="">-- Pilih Anggota --</option>
+                                                            @foreach($anggota as $a)
+                                                                @php
+                                                                    // Calculate availability for this specific member
+                                                                    $isAvailable = true;
+                                                                    $eventDay = \Carbon\Carbon::parse($pelaksanaan->tanggal_kegiatan)->dayOfWeek;
+                                                                    $eventStart = $pelaksanaan->jam_mulai;
+                                                                    $eventEnd = $pelaksanaan->jam_selesai;
+                                                                    
+                                                                    // Only check availability if restrictions are set
+                                                                    if (!empty($a->ketersediaan_hari) || !empty($a->ketersediaan_jam)) {
+                                                                        if (!empty($a->ketersediaan_hari)) {
+                                                                            if (!in_array($eventDay, $a->ketersediaan_hari)) {
+                                                                                $isAvailable = false;
+                                                                            }
+                                                                        }
+                                                                        
+                                                                        if ($isAvailable && !empty($a->ketersediaan_jam)) {
+                                                                            $availableDuringEvent = false;
+                                                                            foreach ($a->ketersediaan_jam as $timeSlot) {
+                                                                                list($availStart, $availEnd) = explode('-', $timeSlot);
+                                                                                if ($eventStart >= $availStart && $eventEnd <= $availEnd) {
+                                                                                    $availableDuringEvent = true;
+                                                                                    break;
+                                                                                }
+                                                                            }
+                                                                            $isAvailable = $availableDuringEvent;
                                                                         }
                                                                     }
                                                                     
-                                                                    // If time restrictions exist and day is available, check time
-                                                                    if ($isAvailable && !empty($a->ketersediaan_jam)) {
-                                                                        $availableDuringEvent = false;
-                                                                        foreach ($a->ketersediaan_jam as $timeSlot) {
-                                                                            list($availStart, $availEnd) = explode('-', $timeSlot);
-                                                                            if ($eventStart >= $availStart && $eventEnd <= $availEnd) {
-                                                                                $availableDuringEvent = true;
-                                                                                break;
-                                                                            }
-                                                                        }
-                                                                        $isAvailable = $availableDuringEvent;
-                                                                    }
-                                                                }
+                                                                    // Check if regular for this position
+                                                                    $isReguler = $a->spesialisasi->contains('posisi', $jadwal->posisi) && 
+                                                                            $a->spesialisasi->where('posisi', $jadwal->posisi)->where('is_reguler', true)->isNotEmpty();
+                                                                    
+                                                                    // Check if can serve this position
+                                                                    $canServePosition = $a->spesialisasi->contains('posisi', $jadwal->posisi);
+                                                                @endphp
                                                                 
-                                                                // Check if this person is regular for this position
-                                                                $isReguler = $a->spesialisasi->contains('posisi', $posisi) && 
-                                                                           $a->spesialisasi->where('posisi', $posisi)->where('is_reguler', true)->isNotEmpty();
-                                                                
-                                                                // Check if already scheduled in this pelaksanaan
-                                                                $alreadyScheduled = false;
-                                                                if (isset($existingJadwal) && $existingJadwal->isNotEmpty()) {
-                                                                    $alreadyScheduled = $existingJadwal->where('posisi', $posisi)->where('id_anggota', $a->id_anggota)->isNotEmpty();
-                                                                }
-                                                            @endphp
-                                                            
-                                                            <option 
-                                                                value="{{ $a->id_anggota }}" 
-                                                                {{ $alreadyScheduled ? 'selected' : '' }}
-                                                                data-reguler="{{ $isReguler ? 'true' : 'false' }}"
-                                                                data-available="{{ $isAvailable ? 'true' : 'false' }}"
-                                                            >
-                                                                {{ $a->nama }}
-                                                                @if($isReguler) (Regular) @endif
-                                                                @if(!$isAvailable) (Tidak Tersedia) @endif
-                                                            </option>
-                                                        @endforeach
-                                                    </select>
+                                                                <option 
+                                                                    value="{{ $a->id_anggota }}" 
+                                                                    {{ $jadwal->id_anggota == $a->id_anggota ? 'selected' : '' }}
+                                                                    data-reguler="{{ $isReguler ? 'true' : 'false' }}"
+                                                                    data-available="{{ $isAvailable ? 'true' : 'false' }}"
+                                                                    data-can-serve="{{ $canServePosition ? 'true' : 'false' }}"
+                                                                    {{ !$canServePosition ? 'style=color:#6c757d;' : '' }}
+                                                                >
+                                                                    {{ $a->nama }}
+                                                                    @if($isReguler) (Regular) @endif
+                                                                    @if(!$isAvailable) (Tidak Tersedia) @endif
+                                                                    @if(!$canServePosition) (Tidak Bisa {{ $jadwal->posisi }}) @endif
+                                                                </option>
+                                                            @endforeach
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-2 d-flex align-items-end">
+                                                    <button type="button" class="btn btn-danger btn-sm remove-petugas-row me-2">
+                                                        <i class="fas fa-trash"></i> Hapus
+                                                    </button>
                                                 </div>
                                             </div>
-                                            <div class="col-md-2 d-flex align-items-end">
-                                                <button type="button" class="btn btn-danger btn-sm remove-petugas-row me-2">
-                                                    <i class="fas fa-trash"></i> Hapus
-                                                </button>
+                                        @endforeach
+                                    @else
+                                        {{-- Create new schedule mode --}}
+                                        @foreach($posisiOptions as $posisi)
+                                            <div class="row mb-3 petugas-row">
+                                                <div class="col-md-3">
+                                                    <div class="form-group">
+                                                        <label class="form-label">Posisi</label>
+                                                        <input type="text" class="form-control" name="petugas[{{ $loop->index }}][posisi]" value="{{ $posisi }}" readonly>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-7">
+                                                    <div class="form-group">
+                                                        <label class="form-label">Anggota</label>
+                                                        <select class="form-select anggota-select" name="petugas[{{ $loop->index }}][id_anggota]" data-posisi="{{ $posisi }}">
+                                                            <option value="">-- Pilih Anggota --</option>
+                                                            @foreach($anggota as $a)
+                                                                @php
+                                                                    // Same availability calculation as above
+                                                                    $isAvailable = true;
+                                                                    $eventDay = \Carbon\Carbon::parse($pelaksanaan->tanggal_kegiatan)->dayOfWeek;
+                                                                    $eventStart = $pelaksanaan->jam_mulai;
+                                                                    $eventEnd = $pelaksanaan->jam_selesai;
+                                                                    
+                                                                    if (!empty($a->ketersediaan_hari) || !empty($a->ketersediaan_jam)) {
+                                                                        if (!empty($a->ketersediaan_hari)) {
+                                                                            if (!in_array($eventDay, $a->ketersediaan_hari)) {
+                                                                                $isAvailable = false;
+                                                                            }
+                                                                        }
+                                                                        
+                                                                        if ($isAvailable && !empty($a->ketersediaan_jam)) {
+                                                                            $availableDuringEvent = false;
+                                                                            foreach ($a->ketersediaan_jam as $timeSlot) {
+                                                                                list($availStart, $availEnd) = explode('-', $timeSlot);
+                                                                                if ($eventStart >= $availStart && $eventEnd <= $availEnd) {
+                                                                                    $availableDuringEvent = true;
+                                                                                    break;
+                                                                                }
+                                                                            }
+                                                                            $isAvailable = $availableDuringEvent;
+                                                                        }
+                                                                    }
+                                                                    
+                                                                    $isReguler = $a->spesialisasi->contains('posisi', $posisi) && 
+                                                                            $a->spesialisasi->where('posisi', $posisi)->where('is_reguler', true)->isNotEmpty();
+                                                                    
+                                                                    $canServePosition = $a->spesialisasi->contains('posisi', $posisi);
+                                                                @endphp
+                                                                
+                                                                <option 
+                                                                    value="{{ $a->id_anggota }}" 
+                                                                    data-reguler="{{ $isReguler ? 'true' : 'false' }}"
+                                                                    data-available="{{ $isAvailable ? 'true' : 'false' }}"
+                                                                    data-can-serve="{{ $canServePosition ? 'true' : 'false' }}"
+                                                                    {{ !$canServePosition ? 'style=color:#6c757d;' : '' }}
+                                                                >
+                                                                    {{ $a->nama }}
+                                                                    @if($isReguler) (Regular) @endif
+                                                                    @if(!$isAvailable) (Tidak Tersedia) @endif
+                                                                    @if(!$canServePosition) (Tidak Bisa {{ $posisi }}) @endif
+                                                                </option>
+                                                            @endforeach
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-2 d-flex align-items-end">
+                                                    <button type="button" class="btn btn-danger btn-sm remove-petugas-row me-2">
+                                                        <i class="fas fa-trash"></i> Hapus
+                                                    </button>
+                                                </div>
                                             </div>
-                                        </div>
-                                    @endforeach
+                                        @endforeach
+                                    @endif
                                 </div>
                                 
                                 <div class="row mt-3">
@@ -150,6 +229,12 @@
                                         <button type="button" id="add-petugas" class="btn btn-success">
                                             <i class="fas fa-plus"></i> Tambah Posisi Lain
                                         </button>
+                                        
+                                        @if($existingJadwal->isNotEmpty())
+                                            <button type="button" id="add-more-positions" class="btn btn-info ms-2">
+                                                <i class="fas fa-plus-circle"></i> Tambah Posisi dari Master
+                                            </button>
+                                        @endif
                                     </div>
                                 </div>
                             </div>
@@ -169,6 +254,23 @@
         </div>
     </div>
 </div>
+
+<div class="modal fade" id="addPositionModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Tambah Posisi</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="available-positions">
+                    <p>Loading posisi yang tersedia...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 @endsection
 
 @section('scripts')
@@ -219,7 +321,7 @@
         }
         
         // Add new position field
-        let positionCounter = {{ count($posisiOptions) }};
+        let positionCounter = {{ $existingJadwal->isNotEmpty() ? $existingJadwal->count() : count($posisiOptions) }};
         $('#add-petugas').click(function() {
             const newRow = `
                 <div class="row mb-3 petugas-row">
@@ -311,6 +413,110 @@
             positionCounter++;
         });
         
+
+        $('#add-more-positions').click(function() {
+            loadAvailablePositions();
+            $('#addPositionModal').modal('show');
+        });
+
+        function loadAvailablePositions() {
+            $.get('/api/master-posisi/positions')
+                .done(function(response) {
+                    if (response.success) {
+                        let html = '<div class="row">';
+                        
+                        // Get currently assigned positions
+                        const assignedPositions = [];
+                        $('.petugas-row input[name*="[posisi]"]').each(function() {
+                            assignedPositions.push($(this).val());
+                        });
+                        
+                        Object.keys(response.data).forEach(category => {
+                            html += `<div class="col-12 mb-3">`;
+                            html += `<h6 class="text-primary">${category}</h6>`;
+                            
+                            response.data[category].forEach(position => {
+                                const isAssigned = assignedPositions.includes(position);
+                                const buttonClass = isAssigned ? 'btn-secondary' : 'btn-outline-primary';
+                                const disabled = isAssigned ? 'disabled' : '';
+                                
+                                html += `
+                                    <button type="button" class="btn ${buttonClass} btn-sm me-1 mb-1 position-btn" 
+                                            data-position="${position}" ${disabled}>
+                                        ${position} ${isAssigned ? '(Sudah ada)' : ''}
+                                    </button>
+                                `;
+                            });
+                            
+                            html += `</div>`;
+                        });
+                        
+                        html += '</div>';
+                        $('#available-positions').html(html);
+                        
+                        // Add click handlers
+                        $('.position-btn:not([disabled])').click(function() {
+                            const position = $(this).data('position');
+                            addPositionFromMaster(position);
+                            $('#addPositionModal').modal('hide');
+                        });
+                    }
+                })
+                .fail(function() {
+                    $('#available-positions').html('<div class="alert alert-danger">Gagal memuat posisi</div>');
+                });
+        }
+        
+        // Add position from master
+        function addPositionFromMaster(position) {
+            const newRow = `
+                <div class="row mb-3 petugas-row">
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label class="form-label">Posisi</label>
+                            <input type="text" class="form-control" name="petugas[${positionCounter}][posisi]" value="${position}" readonly>
+                        </div>
+                    </div>
+                    <div class="col-md-7">
+                        <div class="form-group">
+                            <label class="form-label">Anggota</label>
+                            <select class="form-select anggota-select-new" name="petugas[${positionCounter}][id_anggota]" data-posisi="${position}" required>
+                                <option value="">-- Pilih Anggota --</option>
+                                @foreach($anggota as $a)
+                                    @php
+                                        $canServePosition = $a->spesialisasi->contains('posisi', '${position}');
+                                        $isReguler = $canServePosition && $a->spesialisasi->where('posisi', '${position}')->where('is_reguler', true)->isNotEmpty();
+                                    @endphp
+                                    <option value="{{ $a->id_anggota }}" data-can-serve="{{ $canServePosition ? 'true' : 'false' }}">
+                                        {{ $a->nama }}
+                                        @if($isReguler) (Regular) @endif
+                                        @if(!$canServePosition) (Tidak Bisa ${position}) @endif
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button type="button" class="btn btn-danger btn-sm remove-petugas-row me-2">
+                            <i class="fas fa-trash"></i> Hapus
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            $('#petugas-container').append(newRow);
+            
+            // Initialize Select2 for new row
+            $('.anggota-select-new').select2({
+                placeholder: "Pilih Anggota",
+                allowClear: true,
+                width: '100%'
+            }).removeClass('anggota-select-new');
+            
+            positionCounter++;
+        }
+
+
         // Validation before submit
         $('form').on('submit', function(e) {
             let isValid = true;
@@ -342,6 +548,19 @@
                 }
             });
             
+            // Check for members serving positions they can't handle
+            $('.petugas-row select[name*="[id_anggota]"]').each(function() {
+                const selectedOption = $(this).find('option:selected');
+                const canServe = selectedOption.data('can-serve');
+                const anggotaName = selectedOption.text();
+                const posisi = $(this).closest('.petugas-row').find('input[name*="[posisi]"]').val();
+                
+                if ($(this).val() && canServe === 'false') {
+                    errorMessages.push(`${anggotaName} tidak memiliki spesialisasi untuk posisi "${posisi}".`);
+                    isValid = false;
+                }
+            });
+            
             if (!isValid) {
                 e.preventDefault();
                 alert('Terdapat kesalahan:\n' + errorMessages.join('\n'));
@@ -349,6 +568,25 @@
             }
             
             return true;
+        });
+
+        $('.anggota-select').on('change', function() {
+            const selectedOption = $(this).find('option:selected');
+            const canServe = selectedOption.data('can-serve');
+            const isAvailable = selectedOption.data('available');
+            const isReguler = selectedOption.data('reguler');
+            
+            $(this).removeClass('border-success border-warning border-danger');
+            
+            if ($(this).val()) {
+                if (canServe === 'false') {
+                    $(this).addClass('border-danger');
+                } else if (isAvailable === 'false') {
+                    $(this).addClass('border-warning');
+                } else if (isReguler === 'true') {
+                    $(this).addClass('border-success');
+                }
+            }
         });
         
         // Real-time validation feedback
