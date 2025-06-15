@@ -97,17 +97,92 @@
         </div>
     </div>
 
-    @if($data['users_without_anggota'] > 0 || $data['anggota_without_komsel'] > 0)
+    {{-- UPDATED: Perhatian Sistem Section - Horizontal Layout --}}
+    @if($data['anggota_without_users']->isNotEmpty() || $data['anggota_without_komsel']->isNotEmpty() || $data['anggota_absent_consecutive']->isNotEmpty())
     <div class="row mb-4">
         <div class="col-12">
             <div class="alert alert-warning">
                 <h6><i class="fas fa-exclamation-triangle me-2"></i>Perhatian Sistem</h6>
-                @if($data['users_without_anggota'] > 0)
-                <div>• {{ $data['users_without_anggota'] }} user belum terhubung dengan data anggota</div>
-                @endif
-                @if($data['anggota_without_komsel'] > 0)
-                <div>• {{ $data['anggota_without_komsel'] }} anggota belum bergabung komsel</div>
-                @endif
+                
+                <div class="row">
+                    {{-- UPDATED: Anggota without users with list --}}
+                    @if($data['anggota_without_users']->isNotEmpty())
+                    <div class="col-md-4 mb-3">
+                        <div class="border-start border-warning border-3 ps-3">
+                            <strong class="text-danger">{{ $data['anggota_without_users']->count() }} anggota belum memiliki akun user:</strong>
+                            <div class="mt-2">
+                                @foreach($data['anggota_without_users']->take(5) as $anggota)
+                                <div class="mb-1">
+                                    <a href="{{ route('anggota.show', $anggota->id_anggota) }}" class="text-decoration-none text-danger fw-bold">
+                                        {{ $anggota->nama }}
+                                    </a>
+                                    <br><small class="text-muted">{{ $anggota->email ?: 'Tidak ada email' }}</small>
+                                </div>
+                                @endforeach
+                                @if($data['anggota_without_users']->count() > 5)
+                                <div class="small text-muted mt-1">
+                                    <a href="{{ route('anggota.index') }}?filter=no_user" class="text-decoration-none">
+                                        +{{ $data['anggota_without_users']->count() - 5 }} lainnya...
+                                    </a>
+                                </div>
+                                @endif
+                            </div>
+                        </div>
+                    </div>
+                    @endif
+                    
+                    {{-- UPDATED: Anggota without komsel with list --}}
+                    @if($data['anggota_without_komsel']->isNotEmpty())
+                    <div class="col-md-4 mb-3">
+                        <div class="border-start border-info border-3 ps-3">
+                            <strong class="text-danger">{{ $data['anggota_without_komsel']->count() }} anggota belum bergabung komsel:</strong>
+                            <div class="mt-2">
+                                @foreach($data['anggota_without_komsel']->take(5) as $anggota)
+                                <div class="mb-1">
+                                    <a href="{{ route('anggota.show', $anggota->id_anggota) }}" class="text-decoration-none text-danger fw-bold">
+                                        {{ $anggota->nama }}
+                                    </a>
+                                    <br><small class="text-muted">{{ $anggota->keluarga->nama_keluarga ?? 'Tidak ada keluarga' }}</small>
+                                </div>
+                                @endforeach
+                                @if($data['anggota_without_komsel']->count() > 5)
+                                <div class="small text-muted mt-1">
+                                    <a href="{{ route('anggota.index') }}?filter=no_komsel" class="text-decoration-none">
+                                        +{{ $data['anggota_without_komsel']->count() - 5 }} lainnya...
+                                    </a>
+                                </div>
+                                @endif
+                            </div>
+                        </div>
+                    </div>
+                    @endif
+                    
+                    {{-- Consecutive Absence Alert --}}
+                    @if($data['anggota_absent_consecutive']->isNotEmpty())
+                    <div class="col-md-4 mb-3">
+                        <div class="border-start border-danger border-3 ps-3">
+                            <strong class="text-danger">{{ $data['anggota_absent_consecutive']->count() }} anggota absen 3x berturut-turut:</strong>
+                            <div class="mt-2">
+                                @foreach($data['anggota_absent_consecutive']->take(5) as $absentMember)
+                                <div class="mb-1">
+                                    <a href="{{ route('anggota.show', $absentMember['id_anggota']) }}" class="text-decoration-none text-danger fw-bold">
+                                        {{ $absentMember['nama'] }}
+                                    </a>
+                                    <br><small class="text-muted">{{ $absentMember['last_attendance'] }}</small>
+                                </div>
+                                @endforeach
+                                @if($data['anggota_absent_consecutive']->count() > 5)
+                                <div class="small text-muted mt-1">
+                                    <a href="{{ route('laporan.kehadiran') }}" class="text-decoration-none">
+                                        +{{ $data['anggota_absent_consecutive']->count() - 5 }} lainnya...
+                                    </a>
+                                </div>
+                                @endif
+                            </div>
+                        </div>
+                    </div>
+                    @endif
+                </div>
             </div>
         </div>
     </div>
@@ -581,7 +656,8 @@
                     </div>
                 </div>
                 <div class="card-footer d-flex align-items-center justify-content-between">
-                    <a class="small text-white stretched-link" href="{{ route('kehadiran.scan') }}">Buka Scanner</a>
+                    {{-- FIXED: Changed from kehadiran.scan to kehadiran.index for general attendance page --}}
+                    <a class="small text-white stretched-link" href="{{ route('kehadiran.index') }}">Buka Presensi</a>
                     <div class="small text-white"><i class="fas fa-angle-right"></i></div>
                 </div>
             </div>
@@ -748,40 +824,4 @@
     }
 }
 </style>
-@endsection
-
-@section('scripts')
-<script>
-// Auto-refresh for real-time updates (optional)
-@if($user->id_role <= 3)
-setInterval(function() {
-    // Check for new notifications or pending confirmations
-    fetch('{{ route("dashboard") }}')
-        .then(response => response.text())
-        .then(data => {
-            // Update notification badge if needed
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(data, 'text/html');
-            const newBadge = doc.querySelector('.navbar .badge');
-            const currentBadge = document.querySelector('.navbar .badge');
-            
-            if (newBadge && currentBadge) {
-                if (newBadge.textContent !== currentBadge.textContent) {
-                    currentBadge.textContent = newBadge.textContent;
-                    currentBadge.classList.add('animate__animated', 'animate__pulse');
-                }
-            }
-        })
-        .catch(error => console.log('Refresh error:', error));
-}, 300000); // 5 minutes
-@endif
-
-// Initialize tooltips for better UX
-document.addEventListener('DOMContentLoaded', function() {
-    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-        return new bootstrap.Tooltip(tooltipTriggerEl);
-    });
-});
-</script>
 @endsection

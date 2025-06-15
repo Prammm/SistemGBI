@@ -76,11 +76,12 @@ class DashboardController extends Controller
                 ->limit(5)
                 ->get(),
             
-            // System Alerts
-            'users_without_anggota' => User::whereNull('id_anggota')
-                ->where('id_role', '>', 1)
-                ->count(),
-            'anggota_without_komsel' => Anggota::whereDoesntHave('komsel')->count(),
+            // FIXED: System Alerts - Changed logic with detailed lists
+            'anggota_without_users' => Anggota::whereDoesntHave('user')->get(), // Changed to get() for list
+            'anggota_without_komsel' => Anggota::whereDoesntHave('komsel')->get(), // Changed to get() for list
+            
+            // NEW: Anggota yang absen 3x berturut-turut
+            'anggota_absent_consecutive' => $this->getConsecutiveAbsentMembers(3),
             
             // Upcoming Critical Events
             'upcoming_events' => PelaksanaanKegiatan::with('kegiatan')
@@ -97,6 +98,66 @@ class DashboardController extends Controller
             
             'role_name' => 'Administrator Sistem'
         ];
+    }
+
+    /**
+     * NEW: Get members who have been absent 3 times consecutively
+     */
+    private function getConsecutiveAbsentMembers($consecutiveCount = 3)
+    {
+        // Get recent events (last 2 months)
+        $recentEvents = PelaksanaanKegiatan::with('kegiatan')
+            ->whereHas('kegiatan', function($q) {
+                $q->where('tipe_kegiatan', 'ibadah'); // Focus on main worship services
+            })
+            ->where('tanggal_kegiatan', '>=', Carbon::now()->subMonths(2)->format('Y-m-d'))
+            ->where('tanggal_kegiatan', '<=', Carbon::now()->format('Y-m-d'))
+            ->orderBy('tanggal_kegiatan', 'desc')
+            ->get();
+
+        if ($recentEvents->count() < $consecutiveCount) {
+            return collect(); // Not enough events to check
+        }
+
+        // Get the last N events for consecutive checking
+        $lastNEvents = $recentEvents->take($consecutiveCount);
+        $eventIds = $lastNEvents->pluck('id_pelaksanaan')->toArray();
+
+        // Get all anggota
+        $allAnggota = Anggota::all();
+        $consecutiveAbsentMembers = collect();
+
+        foreach ($allAnggota as $anggota) {
+            $attendanceCount = Kehadiran::where('id_anggota', $anggota->id_anggota)
+                ->whereIn('id_pelaksanaan', $eventIds)
+                ->count();
+
+            // If attendance count is 0 for all recent events, they are consecutively absent
+            if ($attendanceCount === 0) {
+                $consecutiveAbsentMembers->push([
+                    'id_anggota' => $anggota->id_anggota,
+                    'nama' => $anggota->nama,
+                    'email' => $anggota->email,
+                    'no_telepon' => $anggota->no_telepon,
+                    'last_attendance' => $this->getLastAttendanceDate($anggota->id_anggota),
+                    'absent_count' => $consecutiveCount
+                ]);
+            }
+        }
+
+        return $consecutiveAbsentMembers;
+    }
+
+    /**
+     * Helper: Get last attendance date for member
+     */
+    private function getLastAttendanceDate($anggotaId)
+    {
+        $lastAttendance = Kehadiran::where('id_anggota', $anggotaId)
+            ->orderBy('waktu_absensi', 'desc')
+            ->first();
+
+        return $lastAttendance ? Carbon::parse($lastAttendance->waktu_absensi)->format('d/m/Y') : 'Tidak pernah hadir';
     }
 
     /**
