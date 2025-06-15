@@ -15,7 +15,7 @@ class PelaksanaanKegiatanController extends Controller
     {
         $user = auth()->user();
         
-        // If admin, show all activities
+        // If admin or pengurus, show all activities
         if ($user->id_role <= 2) {
             $pelaksanaan = PelaksanaanKegiatan::with('kegiatan')
                 ->orderByRaw('
@@ -29,7 +29,21 @@ class PelaksanaanKegiatanController extends Controller
                 ')
                 ->get();
         }
-        // If regular member or service staff (roles 3 and 4)
+        // If petugas pelayanan, show all activities
+        elseif ($user->id_role == 3) {
+            $pelaksanaan = PelaksanaanKegiatan::with('kegiatan')
+                ->orderByRaw('
+                    CASE 
+                        WHEN DATE(tanggal_kegiatan) = CURDATE() THEN 0
+                        WHEN DATE(tanggal_kegiatan) > CURDATE() THEN 1 
+                        ELSE 2 
+                    END,
+                    DATE(tanggal_kegiatan) ASC,
+                    jam_mulai ASC
+                ')
+                ->get();
+        }
+        // If regular member (anggota jemaat)
         else {
             $anggota = $user->anggota;
             
@@ -59,17 +73,16 @@ class PelaksanaanKegiatanController extends Controller
                 // Get activities related to user's komsel or non-komsel activities
                 $pelaksanaan = PelaksanaanKegiatan::with('kegiatan')
                     ->where(function($query) use ($komselActivityPatterns) {
-                        // Include user's komsel activities
-                        $query->whereHas('kegiatan', function($subquery) use ($komselActivityPatterns) {
-                            $subquery->where('tipe_kegiatan', 'komsel')
-                                ->where(function($nameQuery) use ($komselActivityPatterns) {
-                                    foreach($komselActivityPatterns as $pattern) {
-                                        $nameQuery->orWhere('nama_kegiatan', $pattern);
-                                    }
-                                });
-                        })
+                        if (!empty($komselActivityPatterns)) {
+                            // Include user's komsel activities
+                            $query->whereHas('kegiatan', function($subquery) use ($komselActivityPatterns) {
+                                $subquery->where('tipe_kegiatan', 'komsel')
+                                    ->whereIn('nama_kegiatan', $komselActivityPatterns);
+                            });
+                        }
+                        
                         // Include non-komsel activities (church-wide)
-                        ->orWhereHas('kegiatan', function($subquery) {
+                        $query->orWhereHas('kegiatan', function($subquery) {
                             $subquery->where('tipe_kegiatan', '!=', 'komsel');
                         });
                     })

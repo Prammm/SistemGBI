@@ -206,6 +206,15 @@
         text-align: center;
         margin-top: 20px;
     }
+
+    .security-notice {
+        background: #fff3cd;
+        border: 1px solid #ffc107;
+        border-radius: 10px;
+        padding: 15px;
+        margin-top: 20px;
+        color: #856404;
+    }
 </style>
 @endsection
 
@@ -232,76 +241,137 @@
             </div>
         </div>
         
-        <div id="scanner-status" class="scanner-status waiting">
-            <i class="fas fa-camera me-2"></i>Siap untuk memulai scanning...
-        </div>
+        @php
+            $user = Auth::user();
+            
+            // PERBAIKAN: Gunakan setTimeFromTimeString untuk menghindari double time specification
+            try {
+                $eventDate = \Carbon\Carbon::parse($pelaksanaan->tanggal_kegiatan);
+                $eventStartTime = $eventDate->copy()->setTimeFromTimeString($pelaksanaan->jam_mulai);
+                $eventEndTime = $eventDate->copy()->setTimeFromTimeString($pelaksanaan->jam_selesai);
+            } catch (\Exception $e) {
+                // Fallback jika ada error parsing
+                $eventDate = \Carbon\Carbon::parse($pelaksanaan->tanggal_kegiatan);
+                $eventStartTime = \Carbon\Carbon::createFromFormat('Y-m-d H:i', 
+                    $eventDate->format('Y-m-d') . ' ' . substr($pelaksanaan->jam_mulai, 0, 5));
+                $eventEndTime = \Carbon\Carbon::createFromFormat('Y-m-d H:i', 
+                    $eventDate->format('Y-m-d') . ' ' . substr($pelaksanaan->jam_selesai, 0, 5));
+            }
+            
+            $now = \Carbon\Carbon::now();
+            
+            // QR Code availability window for regular members
+            $qrStartTime = $eventStartTime->copy()->subMinutes(30);
+            $qrEndTime = $eventEndTime->copy();
+            
+            $isQrAvailable = $user->id_role <= 3 || $now->between($qrStartTime, $qrEndTime);
+        @endphp
         
-        <div class="camera-selector" id="camera-selector" style="display: none;">
-            <label for="camera-select" class="form-label">Pilih Kamera:</label>
-            <select id="camera-select" class="form-select">
-                <option value="">Pilih kamera...</option>
-            </select>
-        </div>
-        
-        <div class="scanner-controls">
-            <button id="start-scan-btn" class="btn btn-primary btn-lg me-2">
-                <i class="fas fa-camera"></i> Mulai Scanner
-            </button>
-            <button id="stop-scan-btn" class="btn btn-danger btn-lg" style="display: none;">
-                <i class="fas fa-stop"></i> Stop Scanner
-            </button>
-        </div>
-        
-        <div class="camera-container" id="camera-container" style="display: none;">
-            <video id="scanner-video" playsinline></video>
-            <div class="scanner-overlay">
-                <div class="scanner-corners">
-                    <div class="scanner-corner top-left"></div>
-                    <div class="scanner-corner top-right"></div>
-                    <div class="scanner-corner bottom-left"></div>
-                    <div class="scanner-corner bottom-right"></div>
-                </div>
-                <div class="scanner-line"></div>
+        @if($user->id_role > 3 && !$isQrAvailable)
+            <div class="security-notice">
+                <h6><i class="fas fa-shield-alt me-2"></i>Presensi Belum Tersedia</h6>
+                <p class="mb-2">Untuk menjaga keamanan presensi, QR Code hanya tersedia:</p>
+                <ul class="mb-2">
+                    <li><strong>Mulai:</strong> {{ $qrStartTime->format('d/m/Y H:i') }} (30 menit sebelum acara)</li>
+                    <li><strong>Berakhir:</strong> {{ $qrEndTime->format('d/m/Y H:i') }} (saat acara selesai)</li>
+                </ul>
+                @if($now->lt($qrStartTime))
+                    <p class="mb-0"><strong>QR Code akan tersedia dalam {{ $now->diffInMinutes($qrStartTime) }} menit lagi.</strong></p>
+                @else
+                    <p class="mb-0"><strong>Waktu presensi telah berakhir.</strong></p>
+                @endif
             </div>
-            <button id="torch-btn" class="torch-button" style="display: none;">
-                <i class="fas fa-lightbulb"></i>
-            </button>
-        </div>
-        
-        <div id="camera-permission-denied" class="camera-permission-denied" style="display: none;">
-            <i class="fas fa-exclamation-triangle fa-3x mb-3"></i>
-            <h5>Akses Kamera Ditolak</h5>
-            <p>Untuk menggunakan QR Scanner, Anda perlu memberikan izin akses kamera. Silakan:</p>
-            <ol class="text-start">
-                <li>Klik ikon kamera/kunci di address bar browser</li>
-                <li>Pilih "Allow" atau "Izinkan" untuk akses kamera</li>
-                <li>Refresh halaman ini</li>
-            </ol>
-            <button onclick="location.reload()" class="btn btn-primary mt-3">
-                <i class="fas fa-refresh"></i> Refresh Halaman
-            </button>
-        </div>
-        
-
-        
-        <div class="qr-code-fallback">
-            <h6><i class="fas fa-qrcode me-2"></i>QR Code Statis</h6>
-            <p>Jika kamera tidak berfungsi, gunakan aplikasi QR scanner lain untuk scan kode ini:</p>
-            <div id="qrcode" class="mb-3"></div>
-            <small class="text-muted">Scan dengan aplikasi QR scanner di ponsel Anda</small>
-        </div>
-        
-        <div class="text-center mt-4">
-            <a href="{{ route('kehadiran.index') }}" class="btn btn-secondary">
-                <i class="fas fa-arrow-left"></i> Kembali
-            </a>
-        </div>
+            
+            <div class="text-center mt-4">
+                <a href="{{ route('kehadiran.index') }}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i> Kembali
+                </a>
+            </div>
+        @else
+            <div id="scanner-status" class="scanner-status waiting">
+                <i class="fas fa-camera me-2"></i>Siap untuk memulai scanning...
+            </div>
+            
+            <div class="camera-selector" id="camera-selector" style="display: none;">
+                <label for="camera-select" class="form-label">Pilih Kamera:</label>
+                <select id="camera-select" class="form-select">
+                    <option value="">Pilih kamera...</option>
+                </select>
+            </div>
+            
+            <div class="scanner-controls">
+                <button id="start-scan-btn" class="btn btn-primary btn-lg me-2">
+                    <i class="fas fa-camera"></i> Mulai Scanner
+                </button>
+                <button id="stop-scan-btn" class="btn btn-danger btn-lg" style="display: none;">
+                    <i class="fas fa-stop"></i> Stop Scanner
+                </button>
+            </div>
+            
+            <div class="camera-container" id="camera-container" style="display: none;">
+                <video id="scanner-video" playsinline></video>
+                <div class="scanner-overlay">
+                    <div class="scanner-corners">
+                        <div class="scanner-corner top-left"></div>
+                        <div class="scanner-corner top-right"></div>
+                        <div class="scanner-corner bottom-left"></div>
+                        <div class="scanner-corner bottom-right"></div>
+                    </div>
+                    <div class="scanner-line"></div>
+                </div>
+                <button id="torch-btn" class="torch-button" style="display: none;">
+                    <i class="fas fa-lightbulb"></i>
+                </button>
+            </div>
+            
+            <div id="camera-permission-denied" class="camera-permission-denied" style="display: none;">
+                <i class="fas fa-exclamation-triangle fa-3x mb-3"></i>
+                <h5>Akses Kamera Ditolak</h5>
+                <p>Untuk menggunakan QR Scanner, Anda perlu memberikan izin akses kamera. Silakan:</p>
+                <ol class="text-start">
+                    <li>Klik ikon kamera/kunci di address bar browser</li>
+                    <li>Pilih "Allow" atau "Izinkan" untuk akses kamera</li>
+                    <li>Refresh halaman ini</li>
+                </ol>
+                <button onclick="location.reload()" class="btn btn-primary mt-3">
+                    <i class="fas fa-refresh"></i> Refresh Halaman
+                </button>
+            </div>
+            
+            @if($user->id_role <= 3)
+                <!-- QR Code Statis hanya untuk Petugas Pelayanan ke atas -->
+                <div class="qr-code-fallback">
+                    <h6><i class="fas fa-qrcode me-2"></i>QR Code Statis</h6>
+                    <p>Jika kamera tidak berfungsi, gunakan aplikasi QR scanner lain untuk scan kode ini:</p>
+                    <div id="qrcode" class="mb-3"></div>
+                    <small class="text-muted">Scan dengan aplikasi QR scanner di ponsel Anda</small>
+                </div>
+            @else
+                <!-- Untuk Anggota Jemaat - tidak ada QR Code statis -->
+                <div class="manual-input-card">
+                    <i class="fas fa-shield-alt fa-3x mb-3 text-muted"></i>
+                    <h6>Silahkan Scan QR Code</h6>
+                    <p class="text-muted">Silakan gunakan kamera untuk melakukan scan atau hubungi petugas jika mengalami kesulitan.</p>
+                </div>
+            @endif
+            
+            <div class="text-center mt-4">
+                <a href="{{ route('kehadiran.index') }}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i> Kembali
+                </a>
+            </div>
+        @endif
     </div>
 </div>
 @endsection
 
 @section('scripts')
 <script src="https://unpkg.com/@zxing/library@latest"></script>
+@if($user->id_role <= 3)
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+@endif
+
+@if($isQrAvailable)
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     let codeReader = new ZXing.BrowserQRCodeReader();
@@ -321,7 +391,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const permissionDenied = document.getElementById('camera-permission-denied');
     const torchBtn = document.getElementById('torch-btn');
 
-    // Initialize static QR code
+    @if($user->id_role <= 3)
+    // Initialize static QR code for staff only
     new QRCode(document.getElementById("qrcode"), {
         text: "{{ $qrUrl }}",
         width: 200,
@@ -330,6 +401,7 @@ document.addEventListener('DOMContentLoaded', function() {
         colorLight: "#ffffff",
         correctLevel: QRCode.CorrectLevel.H
     });
+    @endif
 
     // Update status
     function updateStatus(message, type = 'waiting') {
@@ -541,4 +613,5 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 </script>
+@endif
 @endsection

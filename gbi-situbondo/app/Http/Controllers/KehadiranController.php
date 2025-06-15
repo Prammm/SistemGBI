@@ -45,9 +45,10 @@ class KehadiranController extends Controller
                 ->limit(10)
                 ->get();
         } else {
-            // Regular members - see only general church activities and their komsel
+            // Regular members (id_role == 4) - see only relevant events
             $anggota = $user->anggota;
             if ($anggota) {
+                // Get user's komsel names
                 $komselNames = $anggota->komsel->pluck('nama_komsel')->toArray();
                 $komselActivityPatterns = array_map(function($name) {
                     return 'Komsel - ' . $name;
@@ -55,16 +56,18 @@ class KehadiranController extends Controller
                 
                 $pelaksanaan = PelaksanaanKegiatan::with('kegiatan')
                     ->where('tanggal_kegiatan', '>=', Carbon::now()->subDays(1)->format('Y-m-d'))
+                    ->where('tanggal_kegiatan', '<=', Carbon::now()->addDays(7)->format('Y-m-d'))
                     ->where(function($query) use ($komselActivityPatterns) {
                         // Include user's komsel activities
-                        $query->whereHas('kegiatan', function($subquery) use ($komselActivityPatterns) {
-                            $subquery->where('tipe_kegiatan', 'komsel');
-                            foreach($komselActivityPatterns as $pattern) {
-                                $subquery->orWhere('nama_kegiatan', $pattern);
-                            }
-                        })
-                        // Include non-komsel activities (church-wide)
-                        ->orWhereHas('kegiatan', function($subquery) {
+                        if (!empty($komselActivityPatterns)) {
+                            $query->whereHas('kegiatan', function($subquery) use ($komselActivityPatterns) {
+                                $subquery->where('tipe_kegiatan', 'komsel')
+                                    ->whereIn('nama_kegiatan', $komselActivityPatterns);
+                            });
+                        }
+                        
+                        // Include non-komsel activities (church-wide events)
+                        $query->orWhereHas('kegiatan', function($subquery) {
                             $subquery->where('tipe_kegiatan', '!=', 'komsel');
                         });
                     })
@@ -72,11 +75,13 @@ class KehadiranController extends Controller
                     ->limit(10)
                     ->get();
             } else {
+                // User without anggota profile - only general events
                 $pelaksanaan = PelaksanaanKegiatan::with('kegiatan')
                     ->whereHas('kegiatan', function($query) {
                         $query->where('tipe_kegiatan', '!=', 'komsel');
                     })
                     ->where('tanggal_kegiatan', '>=', Carbon::now()->subDays(1)->format('Y-m-d'))
+                    ->where('tanggal_kegiatan', '<=', Carbon::now()->addDays(7)->format('Y-m-d'))
                     ->orderBy('tanggal_kegiatan')
                     ->limit(10)
                     ->get();
@@ -114,21 +119,53 @@ class KehadiranController extends Controller
                 ->with('error', 'Tidak ada kegiatan yang dapat dicatat kehadirannya saat ini.');
         }
         
-        // Get anggota based on user role and after_scan status
+        // PERBAIKAN: Filter anggota berdasarkan tipe kegiatan
+        $anggota = collect();
+        
         if ($user->id_role <= 3) {
-            // Admin/Petugas can see all members
-            $anggota = Anggota::orderBy('nama')->get();
+            // Admin/Petugas can see all members or filtered by event type
+            if ($pelaksanaan->kegiatan->tipe_kegiatan === 'komsel') {
+                // For komsel, only show komsel members
+                $komselName = str_replace('Komsel - ', '', $pelaksanaan->kegiatan->nama_kegiatan);
+                $komsel = Komsel::where('nama_komsel', $komselName)->first();
+                
+                if ($komsel) {
+                    $anggota = $komsel->anggota()->orderBy('nama')->get();
+                }
+            } else {
+                // For non-komsel events, show all members
+                $anggota = Anggota::orderBy('nama')->get();
+            }
         } else {
-            // Regular users after scan can only see family members
+            // Regular users after scan
             if ($request->has('after_scan') && $user->id_anggota) {
                 $currentAnggota = Anggota::find($user->id_anggota);
-                if ($currentAnggota && $currentAnggota->id_keluarga) {
-                    $anggota = Anggota::where('id_keluarga', $currentAnggota->id_keluarga)
-                        ->where('id_anggota', '!=', $user->id_anggota) // Exclude self
-                        ->orderBy('nama')
-                        ->get();
+                
+                if ($pelaksanaan->kegiatan->tipe_kegiatan === 'komsel') {
+                    // For komsel, check if user is member of this komsel
+                    $komselName = str_replace('Komsel - ', '', $pelaksanaan->kegiatan->nama_kegiatan);
+                    $isKomselMember = $currentAnggota->komsel->contains('nama_komsel', $komselName);
+                    
+                    if (!$isKomselMember) {
+                        return redirect()->route('kehadiran.index')
+                            ->with('error', 'Anda bukan anggota komsel ini.');
+                    }
+                    
+                    // Only show family members for komsel events
+                    if ($currentAnggota && $currentAnggota->id_keluarga) {
+                        $anggota = Anggota::where('id_keluarga', $currentAnggota->id_keluarga)
+                            ->where('id_anggota', '!=', $user->id_anggota)
+                            ->orderBy('nama')
+                            ->get();
+                    }
                 } else {
-                    $anggota = collect(); // Empty collection
+                    // For general events, show family members
+                    if ($currentAnggota && $currentAnggota->id_keluarga) {
+                        $anggota = Anggota::where('id_keluarga', $currentAnggota->id_keluarga)
+                            ->where('id_anggota', '!=', $user->id_anggota)
+                            ->orderBy('nama')
+                            ->get();
+                    }
                 }
             } else {
                 return redirect()->route('kehadiran.scan')
