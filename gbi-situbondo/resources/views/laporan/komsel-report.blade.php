@@ -425,11 +425,26 @@
                         <label for="start_date">Tanggal Mulai:</label>
                         <input type="date" id="start_date" name="start_date" class="form-control" value="{{ $startDate->format('Y-m-d') }}">
                     </div>
+                    <div class="export-buttons">
+                        <!-- NEW: Export buttons for komsel report -->
+                        <a href="{{ route('laporan.export', ['jenis' => 'komsel-report', 'format' => 'pdf']) }}?user_id={{ $selectedUserId }}&komsel_id={{ $selectedKomsel->id_komsel }}&start_date={{ $startDate->format('Y-m-d') }}&end_date={{ $endDate->format('Y-m-d') }}" 
+                        class="btn btn-danger ms-2">
+                            <i class="fas fa-file-pdf me-2"></i>Export PDF
+                        </a>
+                        <a href="{{ route('laporan.export', ['jenis' => 'komsel-report', 'format' => 'excel']) }}?user_id={{ $selectedUserId }}&komsel_id={{ $selectedKomsel->id_komsel }}&start_date={{ $startDate->format('Y-m-d') }}&end_date={{ $endDate->format('Y-m-d') }}" 
+                        class="btn btn-success ms-2">
+                            <i class="fas fa-file-excel me-2"></i>Export Excel
+                        </a>
+                        <a href="{{ route('laporan.index') }}" class="btn btn-secondary ms-2">
+                            <i class="fas fa-arrow-left me-2"></i>Kembali
+                        </a>
+                    </div>
                     <div>
                         <button type="submit" class="btn btn-light">
                             <i class="fas fa-search me-2"></i>Lihat Laporan
                         </button>
                     </div>
+
                 </form>
             </div>
         @endif
@@ -639,14 +654,6 @@
         </div>
     @endif
     
-    <div class="export-buttons">
-        <button onclick="window.print()" class="btn btn-outline-warning">
-            <i class="fas fa-print me-2"></i>Cetak Laporan
-        </button>
-        <a href="{{ route('laporan.index') }}" class="btn btn-secondary ms-2">
-            <i class="fas fa-arrow-left me-2"></i>Kembali
-        </a>
-    </div>
 </div>
 @endsection
 

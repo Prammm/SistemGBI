@@ -8,15 +8,12 @@ use App\Models\Kehadiran;
 use App\Models\JadwalPelayanan;
 use App\Models\PelaksanaanKegiatan;
 use App\Models\Komsel;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Barryvdh\DomPDF\Facade\Pdf;
-use Maatwebsite\Excel\Facades\Excel;
-use App\Exports\KehadiranExport;
-use App\Exports\PelayananExport;
-use App\Exports\KomselExport;
-use App\Exports\AnggotaExport;
+use App\Services\ExcelExportService;
 
 class LaporanController extends Controller
 {
@@ -132,8 +129,6 @@ class LaporanController extends Controller
                 'icon' => 'fa-hands-helping',
                 'color' => 'pelayanan'
             ];
-            
-            // TIDAK ADA kehadiran-personal untuk Petugas Pelayanan sesuai requirement
             
             // Service reports with user selection - Petugas Pelayanan bisa pilih anggota lain
             $reports['pelayanan-personal'] = [
@@ -540,7 +535,7 @@ class LaporanController extends Controller
         
         if ($canSelectUser && $request->has('user_id') && $request->user_id) {
             // Admin/Pengurus can view other user's report
-            $selectedUser = \App\Models\User::find($request->user_id);
+            $selectedUser = User::find($request->user_id);
             if ($selectedUser && $selectedUser->id_anggota) {
                 $anggota = Anggota::findOrFail($selectedUser->id_anggota);
                 $selectedUserId = $selectedUser->id;
@@ -578,7 +573,7 @@ class LaporanController extends Controller
         })->map->count()->sortDesc();
         
         // Get all users for selection (if user has permission)
-        $allUsers = $canSelectUser ? \App\Models\User::whereNotNull('id_anggota')->with('anggota')->get() : collect();
+        $allUsers = $canSelectUser ? User::whereNotNull('id_anggota')->with('anggota')->get() : collect();
         
         return view('laporan.personal-report', compact(
             'anggota',
@@ -610,7 +605,7 @@ class LaporanController extends Controller
         
         if ($canSelectUser && $request->has('user_id') && $request->user_id) {
             // Admin/Pengurus/Petugas dapat melihat laporan komsel user lain
-            $selectedUser = \App\Models\User::find($request->user_id);
+            $selectedUser = User::find($request->user_id);
             if ($selectedUser && $selectedUser->id_anggota) {
                 $anggota = Anggota::findOrFail($selectedUser->id_anggota);
                 $selectedUserId = $selectedUser->id;
@@ -696,7 +691,7 @@ class LaporanController extends Controller
         
         // Get komsel leaders for selection (if user has permission)
         $komselLeaders = $canSelectUser ? 
-            \App\Models\User::whereHas('anggota', function($query) {
+            User::whereHas('anggota', function($query) {
                 $query->whereIn('id_anggota', Komsel::pluck('id_pemimpin'));
             })->with('anggota')->get() : collect();
         
@@ -729,7 +724,7 @@ class LaporanController extends Controller
         
         if ($canSelectUser && $request->has('user_id') && $request->user_id) {
             // Admin/Pengurus/Petugas can view other user's service report
-            $selectedUser = \App\Models\User::find($request->user_id);
+            $selectedUser = User::find($request->user_id);
             if ($selectedUser && $selectedUser->id_anggota) {
                 $anggota = Anggota::findOrFail($selectedUser->id_anggota);
                 $selectedUserId = $selectedUser->id;
@@ -769,7 +764,7 @@ class LaporanController extends Controller
         
         // Get users with service history for selection (if user has permission)
         $usersWithService = $canSelectUser ? 
-            \App\Models\User::whereHas('anggota.jadwalPelayanan')->with('anggota')->get() : collect();
+            User::whereHas('anggota.jadwalPelayanan')->with('anggota')->get() : collect();
         
         return view('laporan.personal-service-report', compact(
             'anggota',
@@ -847,7 +842,7 @@ class LaporanController extends Controller
     public function export(Request $request, $jenis, $format = 'pdf')
     {
         // Validasi jenis laporan
-        if (!in_array($jenis, ['kehadiran', 'pelayanan', 'komsel', 'anggota'])) {
+        if (!in_array($jenis, ['kehadiran', 'pelayanan', 'komsel', 'anggota', 'personal-report', 'komsel-report', 'personal-service-report'])) {
             return redirect()->back()->with('error', 'Jenis laporan tidak valid.');
         }
 
@@ -855,6 +850,8 @@ class LaporanController extends Controller
         if (!in_array($format, ['pdf', 'excel'])) {
             return redirect()->back()->with('error', 'Format export tidak valid.');
         }
+
+        $user = Auth::user();
 
         // Mengambil data yang akan di-export berdasarkan jenis laporan
         switch ($jenis) {
@@ -872,7 +869,7 @@ class LaporanController extends Controller
                 if ($format == 'pdf') {
                     return $this->exportToPdf('laporan.kehadiran-pdf', $data, $title);
                 } else {
-                    return Excel::download(new KehadiranExport($data), 'laporan-kehadiran-' . $bulan . '-' . $tahun . '.xlsx');
+                    return ExcelExportService::exportKehadiran($data, $bulan, $tahun);
                 }
                 break;
                 
@@ -890,7 +887,7 @@ class LaporanController extends Controller
                 if ($format == 'pdf') {
                     return $this->exportToPdf('laporan.pelayanan-pdf', $data, $title);
                 } else {
-                    return Excel::download(new PelayananExport($data), 'laporan-pelayanan-' . $bulan . '-' . $tahun . '.xlsx');
+                    return ExcelExportService::exportPelayanan($data, $bulan, $tahun);
                 }
                 break;
                 
@@ -901,7 +898,7 @@ class LaporanController extends Controller
                 if ($format == 'pdf') {
                     return $this->exportToPdf('laporan.komsel-pdf', $data, $title);
                 } else {
-                    return Excel::download(new KomselExport($data), 'laporan-komsel.xlsx');
+                    return ExcelExportService::exportKomsel($data);
                 }
                 break;
                 
@@ -912,7 +909,157 @@ class LaporanController extends Controller
                 if ($format == 'pdf') {
                     return $this->exportToPdf('laporan.anggota-pdf', $data, $title);
                 } else {
-                    return Excel::download(new AnggotaExport($data), 'laporan-anggota.xlsx');
+                    return ExcelExportService::exportAnggota($data);
+                }
+                break;
+
+            case 'personal-report':
+                // NEW: Personal Report Export
+                $canSelectUser = $user->id_role <= 2;
+                $selectedUserId = $request->input('user_id');
+                $anggota = null;
+                
+                if ($canSelectUser && $selectedUserId) {
+                    $selectedUser = User::find($selectedUserId);
+                    if ($selectedUser && $selectedUser->id_anggota) {
+                        $anggota = Anggota::findOrFail($selectedUser->id_anggota);
+                    }
+                }
+                
+                if (!$anggota) {
+                    if (!$user->id_anggota) {
+                        return redirect()->back()->with('error', 'Profil anggota tidak ditemukan.');
+                    }
+                    $anggota = Anggota::findOrFail($user->id_anggota);
+                }
+                
+                $period = $request->input('period', 6);
+                $startDate = Carbon::now()->subMonths($period);
+                $endDate = Carbon::now();
+                
+                $kehadiran = Kehadiran::where('id_anggota', $anggota->id_anggota)
+                    ->whereBetween('waktu_absensi', [$startDate, $endDate])
+                    ->with(['pelaksanaan.kegiatan'])
+                    ->orderBy('waktu_absensi', 'desc')
+                    ->get();
+                
+                $title = 'Laporan Kehadiran Pribadi - ' . $anggota->nama;
+                
+                if ($format == 'pdf') {
+                    return $this->exportPersonalReportToPdf($kehadiran, $anggota, $startDate, $endDate, $title);
+                } else {
+                    return ExcelExportService::exportPersonalReport($kehadiran, $anggota, $startDate, $endDate);
+                }
+                break;
+
+            case 'komsel-report':
+                // NEW: Komsel Report Export
+                $canSelectUser = $user->id_role <= 3;
+                $selectedUserId = $request->input('user_id');
+                $selectedKomselId = $request->input('komsel_id');
+                $anggota = null;
+                
+                if ($canSelectUser && $selectedUserId) {
+                    $selectedUser = User::find($selectedUserId);
+                    if ($selectedUser && $selectedUser->id_anggota) {
+                        $anggota = Anggota::findOrFail($selectedUser->id_anggota);
+                    }
+                }
+                
+                if (!$anggota) {
+                    if (!$user->id_anggota) {
+                        return redirect()->back()->with('error', 'Profil anggota tidak ditemukan.');
+                    }
+                    $anggota = Anggota::findOrFail($user->id_anggota);
+                }
+                
+                // Get komsel data
+                $komselLead = Komsel::where('id_pemimpin', $anggota->id_anggota)->get();
+                if ($komselLead->isEmpty()) {
+                    return redirect()->back()->with('error', 'Anggota bukan pemimpin komsel.');
+                }
+                
+                if ($selectedKomselId) {
+                    $selectedKomsel = Komsel::findOrFail($selectedKomselId);
+                } else {
+                    $selectedKomsel = $komselLead->first();
+                }
+                
+                $startDate = $request->input('start_date') ? Carbon::parse($request->input('start_date')) : Carbon::now()->subMonths(3);
+                $endDate = $request->input('end_date') ? Carbon::parse($request->input('end_date')) : Carbon::now();
+                
+                // Get data for export
+                $komselActivityName = 'Komsel - ' . $selectedKomsel->nama_komsel;
+                $pelaksanaanKomsel = PelaksanaanKegiatan::whereHas('kegiatan', function($query) use ($komselActivityName) {
+                    $query->where('nama_kegiatan', $komselActivityName);
+                })
+                ->whereBetween('tanggal_kegiatan', [$startDate, $endDate])
+                ->orderBy('tanggal_kegiatan', 'desc')
+                ->get();
+                
+                $kehadiran = Kehadiran::whereIn('id_pelaksanaan', $pelaksanaanKomsel->pluck('id_pelaksanaan'))
+                    ->with(['anggota', 'pelaksanaan'])
+                    ->get();
+                
+                $anggotaKomsel = $selectedKomsel->anggota;
+                $attendanceStats = [];
+                foreach ($anggotaKomsel as $member) {
+                    $memberAttendance = $kehadiran->where('id_anggota', $member->id_anggota);
+                    $attendanceStats[$member->id_anggota] = [
+                        'anggota' => $member,
+                        'total_kehadiran' => $memberAttendance->count(),
+                        'total_kegiatan' => $pelaksanaanKomsel->count(),
+                        'persentase' => $pelaksanaanKomsel->count() > 0 
+                            ? round(($memberAttendance->count() / $pelaksanaanKomsel->count()) * 100, 1)
+                            : 0
+                    ];
+                }
+                
+                $title = 'Laporan Komsel - ' . $selectedKomsel->nama_komsel;
+                
+                if ($format == 'pdf') {
+                    return $this->exportKomselReportToPdf($pelaksanaanKomsel, $kehadiran, $attendanceStats, $selectedKomsel, $startDate, $endDate, $title);
+                } else {
+                    return ExcelExportService::exportKomselReport($pelaksanaanKomsel, $kehadiran, $attendanceStats, $selectedKomsel, $startDate, $endDate);
+                }
+                break;
+
+            case 'personal-service-report':
+                // NEW: Personal Service Report Export
+                $canSelectUser = $user->id_role <= 3;
+                $selectedUserId = $request->input('user_id');
+                $anggota = null;
+                
+                if ($canSelectUser && $selectedUserId) {
+                    $selectedUser = User::find($selectedUserId);
+                    if ($selectedUser && $selectedUser->id_anggota) {
+                        $anggota = Anggota::findOrFail($selectedUser->id_anggota);
+                    }
+                }
+                
+                if (!$anggota) {
+                    if (!$user->id_anggota) {
+                        return redirect()->back()->with('error', 'Profil anggota tidak ditemukan.');
+                    }
+                    $anggota = Anggota::findOrFail($user->id_anggota);
+                }
+                
+                $period = $request->input('period', 6);
+                $startDate = Carbon::now()->subMonths($period);
+                $endDate = Carbon::now();
+                
+                $jadwalPelayanan = JadwalPelayanan::where('id_anggota', $anggota->id_anggota)
+                    ->whereBetween('tanggal_pelayanan', [$startDate, $endDate])
+                    ->with(['kegiatan'])
+                    ->orderBy('tanggal_pelayanan', 'desc')
+                    ->get();
+                
+                $title = 'Riwayat Pelayanan - ' . $anggota->nama;
+                
+                if ($format == 'pdf') {
+                    return $this->exportPersonalServiceReportToPdf($jadwalPelayanan, $anggota, $startDate, $endDate, $title);
+                } else {
+                    return ExcelExportService::exportPersonalServiceReport($jadwalPelayanan, $anggota, $startDate, $endDate);
                 }
                 break;
         }
@@ -929,5 +1076,58 @@ class LaporanController extends Controller
         ]);
         
         return $pdf->download($title . '.pdf');
+    }
+
+    private function exportPersonalReportToPdf($kehadiran, $anggota, $startDate, $endDate, $title)
+    {
+        $pdf = PDF::loadView('laporan.personal-report-pdf', [
+            'kehadiran' => $kehadiran,
+            'anggota' => $anggota,
+            'startDate' => $startDate,
+            'endDate' => $endDate,
+            'title' => $title,
+            'date' => Carbon::now()->format('d F Y')
+        ]);
+        
+        $filename = 'laporan-kehadiran-' . strtolower(str_replace(' ', '-', $anggota->nama)) . 
+                   '-' . $startDate->format('Y-m-d') . '-to-' . $endDate->format('Y-m-d') . '.pdf';
+        
+        return $pdf->download($filename);
+    }
+
+    private function exportKomselReportToPdf($pelaksanaanKomsel, $kehadiran, $attendanceStats, $selectedKomsel, $startDate, $endDate, $title)
+    {
+        $pdf = PDF::loadView('laporan.komsel-report-pdf', [
+            'pelaksanaanKomsel' => $pelaksanaanKomsel,
+            'kehadiran' => $kehadiran,
+            'attendanceStats' => $attendanceStats,
+            'selectedKomsel' => $selectedKomsel,
+            'startDate' => $startDate,
+            'endDate' => $endDate,
+            'title' => $title,
+            'date' => Carbon::now()->format('d F Y')
+        ]);
+        
+        $filename = 'laporan-komsel-' . strtolower(str_replace(' ', '-', $selectedKomsel->nama_komsel)) . 
+                   '-' . $startDate->format('Y-m-d') . '-to-' . $endDate->format('Y-m-d') . '.pdf';
+        
+        return $pdf->download($filename);
+    }
+
+    private function exportPersonalServiceReportToPdf($jadwalPelayanan, $anggota, $startDate, $endDate, $title)
+    {
+        $pdf = PDF::loadView('laporan.personal-service-report-pdf', [
+            'jadwalPelayanan' => $jadwalPelayanan,
+            'anggota' => $anggota,
+            'startDate' => $startDate,
+            'endDate' => $endDate,
+            'title' => $title,
+            'date' => Carbon::now()->format('d F Y')
+        ]);
+        
+        $filename = 'riwayat-pelayanan-' . strtolower(str_replace(' ', '-', $anggota->nama)) . 
+                   '-' . $startDate->format('Y-m-d') . '-to-' . $endDate->format('Y-m-d') . '.pdf';
+        
+        return $pdf->download($filename);
     }
 }

@@ -378,6 +378,20 @@
                             <i class="fas fa-search me-2"></i>Lihat Laporan
                         </button>
                     </div>
+                    <div class="export-buttons">
+                        <!-- NEW: Export buttons for personal service report -->
+                        <a href="{{ route('laporan.export', ['jenis' => 'personal-service-report', 'format' => 'pdf']) }}?user_id={{ $selectedUserId }}&period={{ $period }}" 
+                        class="btn btn-danger ms-2">
+                            <i class="fas fa-file-pdf me-2"></i>Export PDF
+                        </a>
+                        <a href="{{ route('laporan.export', ['jenis' => 'personal-service-report', 'format' => 'excel']) }}?user_id={{ $selectedUserId }}&period={{ $period }}" 
+                        class="btn btn-success ms-2">
+                            <i class="fas fa-file-excel me-2"></i>Export Excel
+                        </a>
+                        <a href="{{ route('laporan.index') }}" class="btn btn-secondary ms-2">
+                            <i class="fas fa-arrow-left me-2"></i>Kembali
+                        </a>
+                    </div>
                 </form>
             </div>
         @endif
@@ -520,15 +534,7 @@
             </div>
         </div>
     @endif
-    
-    <div class="text-center mt-4">
-        <a href="{{ route('laporan.index') }}" class="btn btn-secondary">
-            <i class="fas fa-arrow-left me-2"></i>Kembali
-        </a>
-        <button onclick="window.print()" class="btn btn-outline-success ms-2">
-            <i class="fas fa-print me-2"></i>Cetak Laporan
-        </button>
-    </div>
+
 </div>
 @endsection
 
