@@ -713,27 +713,49 @@
     
     function sendNotifications() {
         if (confirm('Kirim notifikasi reminder ke semua anggota yang belum konfirmasi?')) {
-            fetch('{{ route("pelayanan.send-notifications") }}', {
+            
+            // Show loading state
+            const button = event.target;
+            const originalText = button.innerHTML;
+            button.disabled = true;
+            button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Mengirim...';
+            
+            fetch('{{ route("notifikasi.send-pelayanan") }}', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Accept': 'application/json'
                 },
                 body: JSON.stringify({
-                    date: '{{ now()->addDays(7)->format("Y-m-d") }}'
+                    when: 'day_before', // atau bisa diambil dari input user
+                    date: '{{ now()->addDays(7)->format("Y-m-d") }}' // 7 hari ke depan
                 })
             })
             .then(response => response.json())
             .then(data => {
+                // Reset button state
+                button.disabled = false;
+                button.innerHTML = originalText;
+                
                 if (data.success) {
-                    alert('Notifikasi berhasil dikirim!');
+                    alert('✓ ' + data.message);
+                    
+                    // Optional: Show detailed info
+                    if (data.sent_count && data.failed_count) {
+                        console.log(`Sent: ${data.sent_count}, Failed: ${data.failed_count}`);
+                    }
                 } else {
-                    alert('Gagal mengirim notifikasi: ' + data.message);
+                    alert('✗ ' + (data.message || 'Gagal mengirim notifikasi'));
                 }
             })
             .catch(error => {
+                // Reset button state
+                button.disabled = false;
+                button.innerHTML = originalText;
+                
                 console.error('Error:', error);
-                alert('Terjadi kesalahan saat mengirim notifikasi');
+                alert('✗ Terjadi kesalahan saat mengirim notifikasi. Silakan coba lagi.');
             });
         }
     }

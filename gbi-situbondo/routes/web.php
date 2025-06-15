@@ -141,7 +141,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/setup-sample', [PelayananController::class, 'setupSampleData'])->name('setup-sample');
         
         // Notifications & Conflict Resolution
-        Route::post('/send-notifications', [PelayananController::class, 'sendNotifications'])->name('send-notifications');
+        Route::post('/send-notifications', [NotifikasiController::class, 'sendPelayananReminders'])->name('send-notifications');
         Route::post('/resolve-conflicts', [PelayananController::class, 'resolveConflicts'])->name('resolve-conflicts');
         
         // API endpoints for AJAX calls
