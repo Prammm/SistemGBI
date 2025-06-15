@@ -327,7 +327,7 @@
             <div id="camera-permission-denied" class="camera-permission-denied" style="display: none;">
                 <i class="fas fa-exclamation-triangle fa-3x mb-3"></i>
                 <h5>Akses Kamera Ditolak</h5>
-                <p>Untuk menggunakan QR Scanner, Anda perlu memberikan izin akses kamera. Silakan:</p>
+                <p>Untuk menggunakan QR Scanner, Anda perlu memberikan izin akses kamera. Silahkan:</p>
                 <ol class="text-start">
                     <li>Klik ikon kamera/kunci di address bar browser</li>
                     <li>Pilih "Allow" atau "Izinkan" untuk akses kamera</li>
@@ -351,7 +351,7 @@
                 <div class="manual-input-card">
                     <i class="fas fa-shield-alt fa-3x mb-3 text-muted"></i>
                     <h6>Silahkan Scan QR Code</h6>
-                    <p class="text-muted">Silakan gunakan kamera untuk melakukan scan atau hubungi petugas jika mengalami kesulitan.</p>
+                    <p class="text-muted">Silahkan gunakan kamera untuk melakukan scan atau hubungi petugas jika mengalami kesulitan.</p>
                 </div>
             @endif
             

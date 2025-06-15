@@ -130,7 +130,7 @@ class KehadiranController extends Controller
         // Check if user has permission for manual input
         if ($user->id_role > 3 && !$request->has('after_scan')) {
             return redirect()->route('kehadiran.index')
-                ->with('error', 'Anda tidak memiliki akses untuk input manual. Silakan gunakan QR Scanner.');
+                ->with('error', 'Anda tidak memiliki akses untuk input manual. Silahkan gunakan QR Scanner.');
         }
         
         $pelaksanaan = null;
@@ -201,7 +201,7 @@ class KehadiranController extends Controller
                 }
             } else {
                 return redirect()->route('kehadiran.scan')
-                    ->with('info', 'Silakan scan QR code terlebih dahulu untuk melakukan presensi.');
+                    ->with('info', 'Silahkan scan QR code terlebih dahulu untuk melakukan presensi.');
             }
         }
         
@@ -361,7 +361,7 @@ class KehadiranController extends Controller
                 return redirect()->route('kehadiran.create', ['id_pelaksanaan' => $pelaksanaan->id_pelaksanaan]);
             } else {
                 return redirect()->route('dashboard')
-                    ->with('error', 'Profil anggota Anda belum lengkap. Silakan hubungi admin.');
+                    ->with('error', 'Profil anggota Anda belum lengkap. Silahkan hubungi admin.');
             }
         }
         

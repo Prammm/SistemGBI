@@ -524,7 +524,7 @@
                     container.html(`
                         <div class="alert alert-danger">
                             <i class="fas fa-exclamation-circle"></i>
-                            Gagal memuat kegiatan recurring. Silakan refresh halaman.
+                            Gagal memuat kegiatan recurring. Silahkan refresh halaman.
                         </div>
                     `);
                 });

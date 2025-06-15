@@ -95,23 +95,6 @@
                 </div>
             </div>
         </div>
-        <div class="col-xl-3 col-md-6">
-            <div class="card bg-info text-white mb-4">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <div class="small">Aktif Minggu Ini</div>
-                            <div class="fs-4 fw-bold">{{ $data['active_this_week'] }}</div>
-                        </div>
-                        <div class="fs-1 opacity-50"><i class="fas fa-chart-line"></i></div>
-                    </div>
-                </div>
-                <div class="card-footer d-flex align-items-center justify-content-between">
-                    <a class="small text-white stretched-link" href="{{ route('laporan.dashboard') }}">Lihat Analitik</a>
-                    <div class="small text-white"><i class="fas fa-angle-right"></i></div>
-                </div>
-            </div>
-        </div>
     </div>
 
     @if($data['users_without_anggota'] > 0 || $data['anggota_without_komsel'] > 0)

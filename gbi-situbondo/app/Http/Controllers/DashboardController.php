@@ -245,7 +245,7 @@ class DashboardController extends Controller
             return [
                 'role_name' => 'Anggota Jemaat',
                 'profile_incomplete' => true,
-                'message' => 'Profil anggota belum lengkap. Silakan hubungi admin untuk melengkapi profil Anda.'
+                'message' => 'Profil anggota belum lengkap. Silahkan hubungi admin untuk melengkapi profil Anda.'
             ];
         }
 

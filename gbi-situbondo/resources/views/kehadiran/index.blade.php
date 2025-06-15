@@ -105,7 +105,7 @@
                                                     </span>
                                                     @if($user->id_role > 3)
                                                         <br><small class="text-success">
-                                                            Silakan scan QR Code
+                                                            Silahkan scan QR Code
                                                         </small>
                                                     @endif
                                                 @elseif($now->gt($qrEndTime))

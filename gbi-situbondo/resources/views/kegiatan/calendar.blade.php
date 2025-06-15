@@ -621,7 +621,7 @@
                 btn.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
             }, 1500);
         } else {
-            alert('Silakan pilih tanggal terlebih dahulu');
+            alert('Silahkan pilih tanggal terlebih dahulu');
         }
     }
     

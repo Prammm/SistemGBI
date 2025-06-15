@@ -58,7 +58,7 @@ window.addEventListener('DOMContentLoaded', event => {
     // Initialize Select2 if available
     if (typeof $.fn.select2 !== 'undefined') {
         $('.select2').select2({
-            placeholder: "Silakan pilih",
+            placeholder: "Silahkan pilih",
             allowClear: true
         });
     }

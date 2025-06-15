@@ -241,7 +241,7 @@
             <div class="alert alert-info">
                 <i class="fas fa-info-circle me-2"></i>
                 <strong>Informasi:</strong> Akun Anda belum terkait dengan data anggota jemaat. 
-                Silakan hubungi administrator untuk menghubungkan akun Anda dengan data anggota.
+                Silahkan hubungi administrator untuk menghubungkan akun Anda dengan data anggota.
             </div>
         </div>
     </div>

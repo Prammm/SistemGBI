@@ -41,7 +41,7 @@
 
 @if($reminder_type !== 'day_of')
 <div style="text-align: center; margin: 30px 0;">
-    <p><strong>Silakan konfirmasi kehadiran Anda:</strong></p>
+    <p><strong>Silahkan konfirmasi kehadiran Anda:</strong></p>
     <a href="{{ $confirmation_url }}" class="button button-primary">✓ Saya Akan Hadir</a>
     <a href="{{ $reject_url }}" class="button button-secondary">✗ Tidak Bisa Hadir</a>
 </div>
