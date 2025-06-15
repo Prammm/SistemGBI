@@ -422,7 +422,7 @@ class PelayananController extends Controller
         $validator = Validator::make($request->all(), [
             'jadwal_id' => 'required|exists:jadwal_pelayanan,id_pelayanan',
             'new_assignee_id' => 'required|exists:anggota,id_anggota',
-            'reason' => 'required|string|max:500'
+            'reason' => 'nullable|string|max:500'
         ]);
 
         if ($validator->fails()) {

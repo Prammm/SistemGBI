@@ -974,7 +974,7 @@
                             </div>
                             <div class="mb-3">
                                 <label class="form-label">Alasan Penggantian:</label>
-                                <textarea class="form-control" name="reason" rows="2" placeholder="Jelaskan alasan penggantian..." required></textarea>
+                                <textarea class="form-control" name="reason" rows="2" placeholder="Jelaskan alasan penggantian (opsional)..."></textarea>
                             </div>
                             <div class="d-flex justify-content-end gap-2">
                                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
