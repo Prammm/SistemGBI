@@ -7,6 +7,7 @@ use App\Models\Anggota;
 use App\Models\Kehadiran;
 use App\Models\JadwalPelayanan;
 use App\Models\PelaksanaanKegiatan;
+use App\Models\Kegiatan;
 use App\Models\Komsel;
 use App\Models\User;
 use Carbon\Carbon;
@@ -20,7 +21,7 @@ class LaporanController extends Controller
     public function __construct()
     {
         $this->middleware('auth');
-        $this->middleware('permission:view_laporan')->only(['index', 'dashboard']);
+        $this->middleware('permission:view_laporan')->only(['index']);
     }
 
     public function index()
@@ -132,15 +133,20 @@ class LaporanController extends Controller
                 'can_select_user' => true
             ];
             
-            // Komsel reports with user selection - Petugas Pelayanan bisa pilih pemimpin komsel lain
-            $reports['komsel-leader'] = [
-                'title' => 'Laporan Komsel',
-                'description' => 'Melihat statistik kehadiran dan aktivitas komsel (dapat memilih pemimpin komsel).',
-                'route' => 'laporan.komsel-report',
-                'icon' => 'fa-users',
-                'color' => 'komsel',
-                'can_select_user' => true
-            ];
+            // Check if user is a komsel leader (same as regular member logic)
+            if ($user->id_anggota) {
+                $anggota = Anggota::find($user->id_anggota);
+                $isKomselLeader = Komsel::where('id_pemimpin', $anggota->id_anggota)->exists();
+                if ($isKomselLeader) {
+                    $reports['komsel-leader'] = [
+                        'title' => 'Laporan Komsel',
+                        'description' => 'Melihat statistik kehadiran dan aktivitas komsel yang Anda pimpin.',
+                        'route' => 'laporan.komsel-report',
+                        'icon' => 'fa-users',
+                        'color' => 'komsel'
+                    ];
+                }
+            }
         }
         // Anggota Jemaat
         elseif ($user->id_role == 4) {
@@ -194,8 +200,11 @@ class LaporanController extends Controller
                 ->with('error', 'Anda tidak memiliki akses untuk melihat laporan ini.');
         }
 
+        // Get filter parameters
         $bulan = $request->input('bulan', Carbon::now()->month);
         $tahun = $request->input('tahun', Carbon::now()->year);
+        $kegiatan_id = $request->input('kegiatan_id');
+        $pelaksanaan_id = $request->input('pelaksanaan_id');
         
         // Data untuk filter
         $bulanList = [
@@ -206,11 +215,35 @@ class LaporanController extends Controller
         
         $tahunList = range(Carbon::now()->year - 5, Carbon::now()->year);
         
-        // Query data kehadiran berdasarkan bulan dan tahun
-        $kehadiran = Kehadiran::whereMonth('waktu_absensi', $bulan)
+        // Get all kegiatan for filter
+        $kegiatanList = Kegiatan::orderBy('nama_kegiatan')->get();
+        
+        // Get pelaksanaan for selected kegiatan
+        $pelaksanaanList = collect();
+        if ($kegiatan_id) {
+            $pelaksanaanList = PelaksanaanKegiatan::where('id_kegiatan', $kegiatan_id)
+                ->whereMonth('tanggal_kegiatan', $bulan)
+                ->whereYear('tanggal_kegiatan', $tahun)
+                ->orderBy('tanggal_kegiatan')
+                ->get();
+        }
+        
+        // Query data kehadiran berdasarkan filter
+        $kehadiranQuery = Kehadiran::whereMonth('waktu_absensi', $bulan)
             ->whereYear('waktu_absensi', $tahun)
-            ->with(['anggota', 'pelaksanaan.kegiatan'])
-            ->get();
+            ->with(['anggota', 'pelaksanaan.kegiatan']);
+        
+        if ($kegiatan_id) {
+            $kehadiranQuery->whereHas('pelaksanaan', function($query) use ($kegiatan_id) {
+                $query->where('id_kegiatan', $kegiatan_id);
+            });
+        }
+        
+        if ($pelaksanaan_id) {
+            $kehadiranQuery->where('id_pelaksanaan', $pelaksanaan_id);
+        }
+        
+        $kehadiran = $kehadiranQuery->get();
         
         // Menghitung statistik kehadiran
         $totalAnggota = Anggota::count();
@@ -218,12 +251,11 @@ class LaporanController extends Controller
         
         // Kehadiran per kegiatan
         $kehadiranPerKegiatan = $kehadiran->groupBy(function($item) {
-            return $item->pelaksanaan->id_kegiatan ?? 'unknown';
+            return $item->pelaksanaan->kegiatan->nama_kegiatan ?? 'Tidak Diketahui';
         })
         ->map(function ($items, $key) {
-            $firstItem = $items->first();
             return [
-                'kegiatan' => $firstItem->pelaksanaan->kegiatan->nama_kegiatan ?? 'Tidak Diketahui',
+                'kegiatan' => $key,
                 'jumlah' => $items->count()
             ];
         })
@@ -260,15 +292,23 @@ class LaporanController extends Controller
             'totalAnggota', 
             'totalKehadiran', 
             'kehadiranPerKegiatan',
-            'kehadiranPerMinggu'
+            'kehadiranPerMinggu',
+            'kegiatanList',
+            'pelaksanaanList',
+            'kegiatan_id',
+            'pelaksanaan_id'
         ));
     }
 
     public function pelayanan(Request $request)
     {
         $user = Auth::user();
+        
+        // Get filter parameters
         $bulan = $request->input('bulan', Carbon::now()->month);
         $tahun = $request->input('tahun', Carbon::now()->year);
+        $kegiatan_id = $request->input('kegiatan_id');
+        $pelaksanaan_id = $request->input('pelaksanaan_id');
         
         // Data untuk filter
         $bulanList = [
@@ -279,15 +319,35 @@ class LaporanController extends Controller
         
         $tahunList = range(Carbon::now()->year - 5, Carbon::now()->year);
         
-        // Query data pelayanan berdasarkan role
+        // Get all kegiatan for filter
+        $kegiatanList = Kegiatan::orderBy('nama_kegiatan')->get();
+        
+        // Get pelaksanaan for selected kegiatan
+        $pelaksanaanList = collect();
+        if ($kegiatan_id) {
+            $pelaksanaanList = PelaksanaanKegiatan::where('id_kegiatan', $kegiatan_id)
+                ->whereMonth('tanggal_kegiatan', $bulan)
+                ->whereYear('tanggal_kegiatan', $tahun)
+                ->orderBy('tanggal_kegiatan')
+                ->get();
+        }
+        
+        // Query data pelayanan berdasarkan role dan filter
         $query = JadwalPelayanan::whereMonth('tanggal_pelayanan', $bulan)
             ->whereYear('tanggal_pelayanan', $tahun)
-            ->with(['anggota', 'kegiatan']);
+            ->with(['anggota', 'kegiatan', 'pelaksanaan']);
+        
+        if ($kegiatan_id) {
+            $query->where('id_kegiatan', $kegiatan_id);
+        }
+        
+        if ($pelaksanaan_id) {
+            $query->where('id_pelaksanaan', $pelaksanaan_id);
+        }
         
         // Filter based on user role
         if ($user->id_role == 3) {
             // Petugas Pelayanan - show their own services and services they supervise
-            // For now, show all services (can be refined later to specific supervision)
             $jadwalPelayanan = $query->get();
         } elseif ($user->id_role == 4) {
             // Anggota Jemaat - only their own services
@@ -301,12 +361,13 @@ class LaporanController extends Controller
             $jadwalPelayanan = $query->get();
         }
         
-        // Statistik pelayanan
-        $totalPelayanan = $jadwalPelayanan->count();
-        $totalPelayan = $jadwalPelayanan->groupBy('id_anggota')->count();
+        // Statistik pelayanan - hanya yang status_konfirmasi = 'terima'
+        $jadwalPelayananTerima = $jadwalPelayanan->where('status_konfirmasi', 'terima');
+        $totalPelayanan = $jadwalPelayananTerima->count();
+        $totalPelayan = $jadwalPelayananTerima->groupBy('id_anggota')->count();
         
-        // Pelayanan per posisi
-        $pelayananPerPosisi = $jadwalPelayanan->groupBy('posisi')
+        // Pelayanan per posisi - hanya yang diterima
+        $pelayananPerPosisi = $jadwalPelayananTerima->groupBy('posisi')
             ->map(function ($items, $key) {
                 return [
                     'posisi' => $key ?: 'Tidak Diketahui',
@@ -316,8 +377,8 @@ class LaporanController extends Controller
             ->sortByDesc('jumlah')
             ->values();
         
-        // Pelayan paling aktif
-        $pelayanAktif = $jadwalPelayanan->groupBy('id_anggota')
+        // Pelayan paling aktif - hanya yang diterima
+        $pelayanAktif = $jadwalPelayananTerima->groupBy('id_anggota')
             ->map(function ($items, $key) {
                 return [
                     'anggota' => $items->first()->anggota->nama ?? 'Tidak Diketahui',
@@ -337,7 +398,11 @@ class LaporanController extends Controller
             'totalPelayanan', 
             'totalPelayan', 
             'pelayananPerPosisi',
-            'pelayanAktif'
+            'pelayanAktif',
+            'kegiatanList',
+            'pelaksanaanList',
+            'kegiatan_id',
+            'pelaksanaan_id'
         ));
     }
 
@@ -514,7 +579,7 @@ class LaporanController extends Controller
     }
 
     /**
-     * NEW: Personal Report - moved from KehadiranController
+     * Personal Report - moved from KehadiranController
      */
     public function personalReport(Request $request)
     {
@@ -543,16 +608,42 @@ class LaporanController extends Controller
             $anggota = Anggota::findOrFail($user->id_anggota);
         }
         
-        // Get period from request or default to 6 months
+        // Get filter parameters
         $period = $request->input('period', 6);
+        $kegiatan_id = $request->input('kegiatan_id');
+        $pelaksanaan_id = $request->input('pelaksanaan_id');
+        
         $startDate = Carbon::now()->subMonths($period);
         $endDate = Carbon::now();
         
-        $kehadiran = Kehadiran::where('id_anggota', $anggota->id_anggota)
+        // Get all kegiatan for filter
+        $kegiatanList = Kegiatan::orderBy('nama_kegiatan')->get();
+        
+        // Get pelaksanaan for selected kegiatan
+        $pelaksanaanList = collect();
+        if ($kegiatan_id) {
+            $pelaksanaanList = PelaksanaanKegiatan::where('id_kegiatan', $kegiatan_id)
+                ->whereBetween('tanggal_kegiatan', [$startDate, $endDate])
+                ->orderBy('tanggal_kegiatan')
+                ->get();
+        }
+        
+        // Query kehadiran with filters
+        $kehadiranQuery = Kehadiran::where('id_anggota', $anggota->id_anggota)
             ->whereBetween('waktu_absensi', [$startDate, $endDate])
-            ->with(['pelaksanaan.kegiatan'])
-            ->orderBy('waktu_absensi', 'desc')
-            ->get();
+            ->with(['pelaksanaan.kegiatan']);
+        
+        if ($kegiatan_id) {
+            $kehadiranQuery->whereHas('pelaksanaan', function($query) use ($kegiatan_id) {
+                $query->where('id_kegiatan', $kegiatan_id);
+            });
+        }
+        
+        if ($pelaksanaan_id) {
+            $kehadiranQuery->where('id_pelaksanaan', $pelaksanaan_id);
+        }
+        
+        $kehadiran = $kehadiranQuery->orderBy('waktu_absensi', 'desc')->get();
         
         // Calculate statistics
         $totalKehadiran = $kehadiran->count();
@@ -578,25 +669,30 @@ class LaporanController extends Controller
             'period',
             'canSelectUser',
             'allUsers',
-            'selectedUserId'
+            'selectedUserId',
+            'kegiatanList',
+            'pelaksanaanList',
+            'kegiatan_id',
+            'pelaksanaan_id'
         ));
     }
 
     /**
-     * NEW: Komsel Report - moved from KehadiranController
+     * Komsel Report - moved from KehadiranController
+     * Fixed access control: hanya admin dan ketua komsel
      */
     public function komselReport(Request $request)
     {
         $user = Auth::user();
         
-        // Check if user can select other users (Admin, Pengurus, Petugas Pelayanan)
-        $canSelectUser = $user->id_role <= 3;
+        // Check if user can select other users (Admin, Pengurus only - NOT Petugas Pelayanan)
+        $canSelectUser = $user->id_role <= 2;
         $selectedUserId = null;
         $anggota = null;
         $selectedKomselId = null;
         
         if ($canSelectUser && $request->has('user_id') && $request->user_id) {
-            // Admin/Pengurus/Petugas dapat melihat laporan komsel user lain
+            // Admin/Pengurus dapat melihat laporan komsel user lain
             $selectedUser = User::find($request->user_id);
             if ($selectedUser && $selectedUser->id_anggota) {
                 $anggota = Anggota::findOrFail($selectedUser->id_anggota);
@@ -703,7 +799,7 @@ class LaporanController extends Controller
     }
 
     /**
-     * NEW: Personal Service Report for individual members
+     * Personal Service Report for individual members
      */
     public function personalServiceReport(Request $request)
     {
@@ -732,25 +828,51 @@ class LaporanController extends Controller
             $anggota = Anggota::findOrFail($user->id_anggota);
         }
         
-        // Get period from request or default to 6 months
+        // Get filter parameters
         $period = $request->input('period', 6);
+        $kegiatan_id = $request->input('kegiatan_id');
+        $pelaksanaan_id = $request->input('pelaksanaan_id');
+        
         $startDate = Carbon::now()->subMonths($period);
         $endDate = Carbon::now();
         
-        $jadwalPelayanan = JadwalPelayanan::where('id_anggota', $anggota->id_anggota)
-            ->whereBetween('tanggal_pelayanan', [$startDate, $endDate])
-            ->with(['kegiatan'])
-            ->orderBy('tanggal_pelayanan', 'desc')
-            ->get();
+        // Get all kegiatan for filter
+        $kegiatanList = Kegiatan::orderBy('nama_kegiatan')->get();
         
-        // Calculate statistics
-        $totalPelayanan = $jadwalPelayanan->count();
-        $pelayananPerBulan = $jadwalPelayanan->groupBy(function($item) {
+        // Get pelaksanaan for selected kegiatan
+        $pelaksanaanList = collect();
+        if ($kegiatan_id) {
+            $pelaksanaanList = PelaksanaanKegiatan::where('id_kegiatan', $kegiatan_id)
+                ->whereBetween('tanggal_kegiatan', [$startDate, $endDate])
+                ->orderBy('tanggal_kegiatan')
+                ->get();
+        }
+        
+        // Query jadwal pelayanan with filters
+        $jadwalPelayananQuery = JadwalPelayanan::where('id_anggota', $anggota->id_anggota)
+            ->whereBetween('tanggal_pelayanan', [$startDate, $endDate])
+            ->with(['kegiatan', 'pelaksanaan']);
+        
+        if ($kegiatan_id) {
+            $jadwalPelayananQuery->where('id_kegiatan', $kegiatan_id);
+        }
+        
+        if ($pelaksanaan_id) {
+            $jadwalPelayananQuery->where('id_pelaksanaan', $pelaksanaan_id);
+        }
+        
+        $jadwalPelayanan = $jadwalPelayananQuery->orderBy('tanggal_pelayanan', 'desc')->get();
+        
+        // Calculate statistics - hanya yang status_konfirmasi = 'terima'
+        $jadwalPelayananTerima = $jadwalPelayanan->where('status_konfirmasi', 'terima');
+        $totalPelayanan = $jadwalPelayananTerima->count();
+        
+        $pelayananPerBulan = $jadwalPelayananTerima->groupBy(function($item) {
             return Carbon::parse($item->tanggal_pelayanan)->format('Y-m');
         })->map->count();
         
-        $pelayananPerPosisi = $jadwalPelayanan->groupBy('posisi')->map->count()->sortDesc();
-        $pelayananPerKegiatan = $jadwalPelayanan->groupBy(function($item) {
+        $pelayananPerPosisi = $jadwalPelayananTerima->groupBy('posisi')->map->count()->sortDesc();
+        $pelayananPerKegiatan = $jadwalPelayananTerima->groupBy(function($item) {
             return $item->kegiatan->nama_kegiatan ?? 'Tidak Diketahui';
         })->map->count()->sortDesc();
         
@@ -770,64 +892,11 @@ class LaporanController extends Controller
             'period',
             'canSelectUser',
             'usersWithService',
-            'selectedUserId'
-        ));
-    }
-
-    public function dashboard()
-    {
-        // Statistik untuk dashboard
-        $totalAnggota = Anggota::count();
-        $totalKegiatan = PelaksanaanKegiatan::whereMonth('tanggal_kegiatan', Carbon::now()->month)
-            ->whereYear('tanggal_kegiatan', Carbon::now()->year)
-            ->count();
-        $totalKomsel = Komsel::count();
-        
-        // Kehadiran 4 minggu terakhir
-        $kehadiranMingguIni = Kehadiran::whereBetween('waktu_absensi', [
-            Carbon::now()->startOfWeek(), 
-            Carbon::now()->endOfWeek()
-        ])->count();
-        
-        $kehadiranMingguLalu = Kehadiran::whereBetween('waktu_absensi', [
-            Carbon::now()->subWeek()->startOfWeek(), 
-            Carbon::now()->subWeek()->endOfWeek()
-        ])->count();
-        
-        $kehadiranPerMinggu = [];
-        for ($i = 3; $i >= 0; $i--) {
-            $weekStart = Carbon::now()->subWeeks($i)->startOfWeek();
-            $weekEnd = Carbon::now()->subWeeks($i)->endOfWeek();
-            
-            $count = Kehadiran::whereBetween('waktu_absensi', [$weekStart, $weekEnd])->count();
-            
-            $kehadiranPerMinggu[] = [
-                'minggu' => $weekStart->format('d M') . ' - ' . $weekEnd->format('d M'),
-                'jumlah' => $count
-            ];
-        }
-        
-        // Kegiatan yang akan datang
-        $kegiatanMendatang = PelaksanaanKegiatan::where('tanggal_kegiatan', '>=', Carbon::now())
-            ->with('kegiatan')
-            ->orderBy('tanggal_kegiatan', 'asc')
-            ->take(5)
-            ->get();
-        
-        // Anggota yang berulang tahun bulan ini
-        $ultahBulanIni = Anggota::whereMonth('tanggal_lahir', Carbon::now()->month)
-            ->orderByRaw('DAY(tanggal_lahir)')
-            ->get();
-        
-        return view('laporan.dashboard', compact(
-            'totalAnggota', 
-            'totalKegiatan', 
-            'totalKomsel', 
-            'kehadiranMingguIni', 
-            'kehadiranMingguLalu',
-            'kehadiranPerMinggu',
-            'kegiatanMendatang',
-            'ultahBulanIni'
+            'selectedUserId',
+            'kegiatanList',
+            'pelaksanaanList',
+            'kegiatan_id',
+            'pelaksanaan_id'
         ));
     }
 
@@ -850,12 +919,24 @@ class LaporanController extends Controller
             case 'kehadiran':
                 $bulan = $request->input('bulan', Carbon::now()->month);
                 $tahun = $request->input('tahun', Carbon::now()->year);
+                $kegiatan_id = $request->input('kegiatan_id');
+                $pelaksanaan_id = $request->input('pelaksanaan_id');
                 
-                $data = Kehadiran::whereMonth('waktu_absensi', $bulan)
+                $query = Kehadiran::whereMonth('waktu_absensi', $bulan)
                     ->whereYear('waktu_absensi', $tahun)
-                    ->with(['anggota', 'pelaksanaan.kegiatan'])
-                    ->get();
+                    ->with(['anggota', 'pelaksanaan.kegiatan']);
                 
+                if ($kegiatan_id) {
+                    $query->whereHas('pelaksanaan', function($q) use ($kegiatan_id) {
+                        $q->where('id_kegiatan', $kegiatan_id);
+                    });
+                }
+                
+                if ($pelaksanaan_id) {
+                    $query->where('id_pelaksanaan', $pelaksanaan_id);
+                }
+                
+                $data = $query->get();
                 $title = 'Laporan Kehadiran ' . Carbon::createFromDate($tahun, $bulan, 1)->format('F Y');
                 
                 if ($format == 'pdf') {
@@ -868,12 +949,22 @@ class LaporanController extends Controller
             case 'pelayanan':
                 $bulan = $request->input('bulan', Carbon::now()->month);
                 $tahun = $request->input('tahun', Carbon::now()->year);
+                $kegiatan_id = $request->input('kegiatan_id');
+                $pelaksanaan_id = $request->input('pelaksanaan_id');
                 
-                $data = JadwalPelayanan::whereMonth('tanggal_pelayanan', $bulan)
+                $query = JadwalPelayanan::whereMonth('tanggal_pelayanan', $bulan)
                     ->whereYear('tanggal_pelayanan', $tahun)
-                    ->with(['anggota', 'kegiatan'])
-                    ->get();
+                    ->with(['anggota', 'kegiatan', 'pelaksanaan']);
                 
+                if ($kegiatan_id) {
+                    $query->where('id_kegiatan', $kegiatan_id);
+                }
+                
+                if ($pelaksanaan_id) {
+                    $query->where('id_pelaksanaan', $pelaksanaan_id);
+                }
+                
+                $data = $query->get();
                 $title = 'Laporan Pelayanan ' . Carbon::createFromDate($tahun, $bulan, 1)->format('F Y');
                 
                 if ($format == 'pdf') {
@@ -906,7 +997,7 @@ class LaporanController extends Controller
                 break;
 
             case 'personal-report':
-                // NEW: Personal Report Export
+                // Personal Report Export
                 $canSelectUser = $user->id_role <= 2;
                 $selectedUserId = $request->input('user_id');
                 $anggota = null;
@@ -926,15 +1017,26 @@ class LaporanController extends Controller
                 }
                 
                 $period = $request->input('period', 6);
+                $kegiatan_id = $request->input('kegiatan_id');
+                $pelaksanaan_id = $request->input('pelaksanaan_id');
                 $startDate = Carbon::now()->subMonths($period);
                 $endDate = Carbon::now();
                 
-                $kehadiran = Kehadiran::where('id_anggota', $anggota->id_anggota)
+                $query = Kehadiran::where('id_anggota', $anggota->id_anggota)
                     ->whereBetween('waktu_absensi', [$startDate, $endDate])
-                    ->with(['pelaksanaan.kegiatan'])
-                    ->orderBy('waktu_absensi', 'desc')
-                    ->get();
+                    ->with(['pelaksanaan.kegiatan']);
                 
+                if ($kegiatan_id) {
+                    $query->whereHas('pelaksanaan', function($q) use ($kegiatan_id) {
+                        $q->where('id_kegiatan', $kegiatan_id);
+                    });
+                }
+                
+                if ($pelaksanaan_id) {
+                    $query->where('id_pelaksanaan', $pelaksanaan_id);
+                }
+                
+                $kehadiran = $query->orderBy('waktu_absensi', 'desc')->get();
                 $title = 'Laporan Kehadiran Pribadi - ' . $anggota->nama;
                 
                 if ($format == 'pdf') {
@@ -945,8 +1047,8 @@ class LaporanController extends Controller
                 break;
 
             case 'komsel-report':
-                // NEW: Komsel Report Export
-                $canSelectUser = $user->id_role <= 3;
+                // Komsel Report Export
+                $canSelectUser = $user->id_role <= 2;
                 $selectedUserId = $request->input('user_id');
                 $selectedKomselId = $request->input('komsel_id');
                 $anggota = null;
@@ -965,7 +1067,6 @@ class LaporanController extends Controller
                     $anggota = Anggota::findOrFail($user->id_anggota);
                 }
                 
-                // Get komsel data
                 $komselLead = Komsel::where('id_pemimpin', $anggota->id_anggota)->get();
                 if ($komselLead->isEmpty()) {
                     return redirect()->back()->with('error', 'Anggota bukan pemimpin komsel.');
@@ -980,7 +1081,6 @@ class LaporanController extends Controller
                 $startDate = $request->input('start_date') ? Carbon::parse($request->input('start_date')) : Carbon::now()->subMonths(3);
                 $endDate = $request->input('end_date') ? Carbon::parse($request->input('end_date')) : Carbon::now();
                 
-                // Get data for export
                 $komselActivityName = 'Komsel - ' . $selectedKomsel->nama_komsel;
                 $pelaksanaanKomsel = PelaksanaanKegiatan::whereHas('kegiatan', function($query) use ($komselActivityName) {
                     $query->where('nama_kegiatan', $komselActivityName);
@@ -1017,7 +1117,7 @@ class LaporanController extends Controller
                 break;
 
             case 'personal-service-report':
-                // NEW: Personal Service Report Export
+                // Personal Service Report Export
                 $canSelectUser = $user->id_role <= 3;
                 $selectedUserId = $request->input('user_id');
                 $anggota = null;
@@ -1037,15 +1137,24 @@ class LaporanController extends Controller
                 }
                 
                 $period = $request->input('period', 6);
+                $kegiatan_id = $request->input('kegiatan_id');
+                $pelaksanaan_id = $request->input('pelaksanaan_id');
                 $startDate = Carbon::now()->subMonths($period);
                 $endDate = Carbon::now();
                 
-                $jadwalPelayanan = JadwalPelayanan::where('id_anggota', $anggota->id_anggota)
+                $query = JadwalPelayanan::where('id_anggota', $anggota->id_anggota)
                     ->whereBetween('tanggal_pelayanan', [$startDate, $endDate])
-                    ->with(['kegiatan'])
-                    ->orderBy('tanggal_pelayanan', 'desc')
-                    ->get();
+                    ->with(['kegiatan', 'pelaksanaan']);
                 
+                if ($kegiatan_id) {
+                    $query->where('id_kegiatan', $kegiatan_id);
+                }
+                
+                if ($pelaksanaan_id) {
+                    $query->where('id_pelaksanaan', $pelaksanaan_id);
+                }
+                
+                $jadwalPelayanan = $query->orderBy('tanggal_pelayanan', 'desc')->get();
                 $title = 'Riwayat Pelayanan - ' . $anggota->nama;
                 
                 if ($format == 'pdf') {
