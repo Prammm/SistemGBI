@@ -30,22 +30,54 @@ class KehadiranController extends Controller
         $kegiatan = Kegiatan::all();
         
         // Get upcoming events based on user role
-        if ($user->id_role <= 2) {
-            // Admin/Pengurus - see all events
+        if ($user->id_role == 1) { // Admin only (role 2 pengurus dihapus)
             $pelaksanaan = PelaksanaanKegiatan::with('kegiatan')
                 ->where('tanggal_kegiatan', '>=', Carbon::now()->subDays(7)->format('Y-m-d'))
                 ->orderBy('tanggal_kegiatan')
                 ->limit(10)
                 ->get();
         } elseif ($user->id_role == 3) {
-            // Petugas Pelayanan - see all events
-            $pelaksanaan = PelaksanaanKegiatan::with('kegiatan')
-                ->where('tanggal_kegiatan', '>=', Carbon::now()->subDays(7)->format('Y-m-d'))
-                ->orderBy('tanggal_kegiatan')
-                ->limit(10)
-                ->get();
+            // PETUGAS PELAYANAN (id_role = 3) - see only relevant events (no other komsel)
+            $anggota = $user->anggota;
+            if ($anggota) {
+                // Get user's komsel names
+                $komselNames = $anggota->komsel->pluck('nama_komsel')->toArray();
+                $komselActivityPatterns = array_map(function($name) {
+                    return 'Komsel - ' . $name;
+                }, $komselNames);
+                
+                $pelaksanaan = PelaksanaanKegiatan::with('kegiatan')
+                    ->where('tanggal_kegiatan', '>=', Carbon::now()->subDays(7)->format('Y-m-d'))
+                    ->where(function($query) use ($komselActivityPatterns) {
+                        // Include user's komsel activities
+                        if (!empty($komselActivityPatterns)) {
+                            $query->whereHas('kegiatan', function($subquery) use ($komselActivityPatterns) {
+                                $subquery->where('tipe_kegiatan', 'komsel')
+                                    ->whereIn('nama_kegiatan', $komselActivityPatterns);
+                            });
+                        }
+                        
+                        // Include non-komsel activities (church-wide events)
+                        $query->orWhereHas('kegiatan', function($subquery) {
+                            $subquery->where('tipe_kegiatan', '!=', 'komsel');
+                        });
+                    })
+                    ->orderBy('tanggal_kegiatan')
+                    ->limit(10)
+                    ->get();
+            } else {
+                // Petugas without anggota profile - only general events
+                $pelaksanaan = PelaksanaanKegiatan::with('kegiatan')
+                    ->whereHas('kegiatan', function($query) {
+                        $query->where('tipe_kegiatan', '!=', 'komsel');
+                    })
+                    ->where('tanggal_kegiatan', '>=', Carbon::now()->subDays(7)->format('Y-m-d'))
+                    ->orderBy('tanggal_kegiatan')
+                    ->limit(10)
+                    ->get();
+            }
         } else {
-            // Regular members (id_role == 4) - see only relevant events
+            // ANGGOTA JEMAAT (id_role = 4) - see only relevant events (no other komsel)
             $anggota = $user->anggota;
             if ($anggota) {
                 // Get user's komsel names
@@ -122,7 +154,7 @@ class KehadiranController extends Controller
         // PERBAIKAN: Filter anggota berdasarkan tipe kegiatan
         $anggota = collect();
         
-        if ($user->id_role <= 3) {
+        if ($user->id_role <= 3) { // Admin (1) atau Petugas Pelayanan (3)
             // Admin/Petugas can see all members or filtered by event type
             if ($pelaksanaan->kegiatan->tipe_kegiatan === 'komsel') {
                 // For komsel, only show komsel members
@@ -233,7 +265,7 @@ class KehadiranController extends Controller
             $pelaksanaan = PelaksanaanKegiatan::findOrFail($request->id_pelaksanaan);
             
             // For regular users after scan, don't delete existing attendance
-            if ($user->id_role <= 3) {
+            if ($user->id_role <= 3) { // Admin (1) atau Petugas Pelayanan (3)
                 // Admin/Petugas can reset all attendance
                 Kehadiran::where('id_pelaksanaan', $request->id_pelaksanaan)->delete();
             }
@@ -324,7 +356,7 @@ class KehadiranController extends Controller
         
         // Only logged in users with anggota record can scan
         if (!$user->id_anggota) {
-            if ($user->id_role <= 3) {
+            if ($user->id_role <= 3) { // Admin (1) atau Petugas Pelayanan (3)
                 // Admin/Petugas redirect to manual input
                 return redirect()->route('kehadiran.create', ['id_pelaksanaan' => $pelaksanaan->id_pelaksanaan]);
             } else {

@@ -15,8 +15,8 @@ class PelaksanaanKegiatanController extends Controller
     {
         $user = auth()->user();
         
-        // If admin or pengurus, show all activities
-        if ($user->id_role <= 2) {
+        // If admin only (role 2 pengurus dihapus)
+        if ($user->id_role == 1) {
             $pelaksanaan = PelaksanaanKegiatan::with('kegiatan')
                 ->orderByRaw('
                     CASE 
@@ -29,21 +29,7 @@ class PelaksanaanKegiatanController extends Controller
                 ')
                 ->get();
         }
-        // If petugas pelayanan, show all activities
-        elseif ($user->id_role == 3) {
-            $pelaksanaan = PelaksanaanKegiatan::with('kegiatan')
-                ->orderByRaw('
-                    CASE 
-                        WHEN DATE(tanggal_kegiatan) = CURDATE() THEN 0
-                        WHEN DATE(tanggal_kegiatan) > CURDATE() THEN 1 
-                        ELSE 2 
-                    END,
-                    DATE(tanggal_kegiatan) ASC,
-                    jam_mulai ASC
-                ')
-                ->get();
-        }
-        // If regular member (anggota jemaat)
+        // If petugas pelayanan (role 3) or anggota jemaat (role 4)
         else {
             $anggota = $user->anggota;
             
@@ -157,8 +143,8 @@ class PelaksanaanKegiatanController extends Controller
     {
         $user = auth()->user();
         
-        // If regular member or service staff (not admin)
-        if ($user->id_role > 2) {
+        // If petugas pelayanan (role 3) or anggota jemaat (role 4) - not admin
+        if ($user->id_role > 1) {
             $anggota = $user->anggota;
             
             // Check if the activity is a komsel activity
