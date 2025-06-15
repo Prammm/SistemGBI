@@ -130,22 +130,6 @@
                     
                 </div>
             </div>
-            
-            <div class="card mb-4">
-                <div class="card-header">
-                    <i class="fas fa-qrcode me-1"></i>
-                    QR Code Presensi
-                </div>
-                <div class="card-body text-center">
-                    <div class="mb-3">
-                        <div id="qrcode"></div>
-                    </div>
-                    <p class="text-muted">Scan QR code ini untuk melakukan presensi kehadiran</p>
-                    <a href="{{ route('kehadiran.scan', $pelaksanaan->id_pelaksanaan) }}" class="btn btn-primary">
-                        <i class="fas fa-expand"></i> Tampilkan QR Code Layar Penuh
-                    </a>
-                </div>
-            </div>
         </div>
         
         <div class="col-xl-6">

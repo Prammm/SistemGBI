@@ -252,33 +252,6 @@
         </div>
     @endif
 
-    @if(Auth::user()->id_role == 3)
-        <div class="card mt-4">
-            <div class="card-header">
-                <i class="fas fa-info-circle me-2"></i>Informasi untuk Petugas Pelayanan
-            </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-3">
-                        <h6><i class="fas fa-clipboard-check me-2"></i>Laporan Kehadiran</h6>
-                        <p class="small">Akses laporan kehadiran umum untuk semua kegiatan gereja dengan filter periode.</p>
-                    </div>
-                    <div class="col-md-3">
-                        <h6><i class="fas fa-hands-helping me-2"></i>Laporan Pelayanan</h6>
-                        <p class="small">Kelola dan pantau jadwal pelayanan serta kinerja pelayan. Dapat memilih anggota lain.</p>
-                    </div>
-                    <div class="col-md-3">
-                        <h6><i class="fas fa-user-check me-2"></i>Kehadiran Pribadi</h6>
-                        <p class="small">Pantau kehadiran pribadi Anda dengan analisis tren dan statistik.</p>
-                    </div>
-                    <div class="col-md-3">
-                        <h6><i class="fas fa-users me-2"></i>Laporan Komsel</h6>
-                        <p class="small">Khusus untuk pemimpin komsel, lihat aktivitas dan kehadiran anggota komsel.</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    @endif
 
 
 </div>

@@ -156,42 +156,6 @@
                 </div>
             </div>
             
-            <div class="col-md-6">
-                <div class="card h-100">
-                    <div class="card-header">
-                        <i class="fas fa-exclamation-triangle me-2"></i>Pemeriksaan Absensi
-                    </div>
-                    <div class="card-body">
-                        <form method="POST" action="{{ route('notifikasi.check-absences') }}" class="mb-3">
-                            @csrf
-                            <div class="row">
-                                <div class="col-6">
-                                    <label class="form-label">Threshold</label>
-                                    <select name="threshold" class="form-select form-select-sm">
-                                        <option value="2">2 kali berturut-turut</option>
-                                        <option value="3" selected>3 kali berturut-turut</option>
-                                        <option value="4">4 kali berturut-turut</option>
-                                        <option value="5">5 kali berturut-turut</option>
-                                    </select>
-                                </div>
-                                <div class="col-6">
-                                    <label class="form-label">Periode</label>
-                                    <select name="days" class="form-select form-select-sm">
-                                        <option value="14">2 minggu terakhir</option>
-                                        <option value="30" selected>1 bulan terakhir</option>
-                                        <option value="60">2 bulan terakhir</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <button type="submit" class="btn btn-warning btn-sm mt-2">
-                                <i class="fas fa-search"></i> Periksa Absensi Berturut-turut
-                            </button>
-                        </form>
-                        <small class="text-muted">Sistem akan mengirim notifikasi kepada pengurus dan anggota yang tidak hadir berturut-turut.</small>
-                    </div>
-                </div>
-            </div>
-        </div>
         
         @if(Auth::user()->id_role == 1)
         @endif
@@ -305,29 +269,7 @@
             </div>
         </div>
     </div>
-    
-    <!-- Queue Status (for admin) -->
-    @if(Auth::user()->id_role <= 2)
-    <div class="row mt-4">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header">
-                    <i class="fas fa-tasks me-2"></i>Status Queue System
-                </div>
-                <div class="card-body">
-                    <div id="queue-status">
-                        <span class="queue-status processing">
-                            <i class="fas fa-spinner fa-spin"></i> Memuat status queue...
-                        </span>
-                    </div>
-                    <small class="text-muted d-block mt-2">
-                        Queue system memproses email notifikasi secara background untuk performa yang optimal.
-                    </small>
-                </div>
-            </div>
-        </div>
-    </div>
-    @endif
+
 </div>
 @endsection
 
