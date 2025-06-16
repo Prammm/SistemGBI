@@ -53,11 +53,6 @@
                         <a href="{{ route('pelayanan.availability', $anggota->id_anggota) }}" class="btn btn-primary btn-sm">
                             <i class="fas fa-edit"></i> Edit Ketersediaan
                         </a>
-                        @if(Auth::user()->id_role <= 2)
-                            <a href="{{ route('pelayanan.assign-regular', $anggota->id_anggota) }}" class="btn btn-success btn-sm">
-                                <i class="fas fa-star"></i> Manage Regular
-                            </a>
-                        @endif
                     </div>
                 </div>
             </div>

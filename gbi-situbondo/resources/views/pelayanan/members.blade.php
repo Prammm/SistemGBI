@@ -45,15 +45,6 @@
                             <option value="no_specialization" {{ request('status') === 'no_specialization' ? 'selected' : '' }}>Belum Ada Spesialisasi</option>
                         </select>
                     </div>
-                    <div class="col-md-2">
-                        <label class="form-label">Urutkan:</label>
-                        <select class="form-select" name="sort">
-                            <option value="nama" {{ request('sort') === 'nama' ? 'selected' : '' }}>Nama A-Z</option>
-                            <option value="total_services" {{ request('sort') === 'total_services' ? 'selected' : '' }}>Total Pelayanan</option>
-                            <option value="recent_services" {{ request('sort') === 'recent_services' ? 'selected' : '' }}>Pelayanan Terakhir</option>
-                            <option value="workload" {{ request('sort') === 'workload' ? 'selected' : '' }}>Workload</option>
-                        </select>
-                    </div>
                     <div class="col-md-2 d-flex align-items-end">
                         <button type="submit" class="btn btn-primary me-2">
                             <i class="fas fa-search"></i> Filter
@@ -129,11 +120,6 @@
             <i class="fas fa-list me-1"></i>
             Daftar Anggota Pelayanan ({{ $members->total() }} total)
             
-            <div class="float-end">
-                <a href="{{ route('pelayanan.members.export') }}?{{ http_build_query(request()->all()) }}" class="btn btn-success btn-sm">
-                    <i class="fas fa-download"></i> Export Excel
-                </a>
-            </div>
         </div>
         <div class="card-body">
             @if($members->isNotEmpty())
@@ -250,11 +236,6 @@
                                             <a href="{{ route('pelayanan.availability', $member->id_anggota) }}" class="btn btn-outline-success" title="Edit Ketersediaan">
                                                 <i class="fas fa-calendar-edit"></i>
                                             </a>
-                                            @if(Auth::user()->id_role <= 2)
-                                                <a href="{{ route('pelayanan.assign-regular', $member->id_anggota) }}" class="btn btn-outline-warning" title="Manage Regular">
-                                                    <i class="fas fa-star"></i>
-                                                </a>
-                                            @endif
                                         </div>
                                     </td>
                                 </tr>
