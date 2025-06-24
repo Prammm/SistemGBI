@@ -644,7 +644,7 @@
             <div class="card-body">
                 <!-- Export Buttons -->
                 @if(!$canSelectUser || !$selectedUserId)
-                    <div class="export-buttons">
+                    <div class="export-buttons p-3">
                         <a href="{{ route('laporan.export', ['jenis' => 'komsel-report', 'format' => 'pdf']) }}?user_id={{ $selectedUserId }}&komsel_id={{ $selectedKomsel->id_komsel }}&start_date={{ $startDate->format('Y-m-d') }}&end_date={{ $endDate->format('Y-m-d') }}" 
                            class="btn btn-danger btn-sm">
                             <i class="fas fa-file-pdf me-1"></i>Export PDF

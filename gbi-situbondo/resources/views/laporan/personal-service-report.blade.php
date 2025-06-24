@@ -544,7 +544,7 @@
             @if($jadwalPelayanan->count() > 0)
                 <!-- Export Buttons -->
                 @if(!$canSelectUser || !$selectedUserId)
-                    <div class="export-buttons">
+                    <div class="export-buttons p-3">
                         <a href="{{ route('laporan.export', ['jenis' => 'personal-service-report', 'format' => 'pdf']) }}{{ request()->getQueryString() ? '?' . request()->getQueryString() : '' }}" 
                            class="btn btn-danger btn-sm">
                             <i class="fas fa-file-pdf me-1"></i>Export PDF
