@@ -93,7 +93,7 @@
                             
                             <div class="mb-3">
                                 <label for="tanggal_kegiatan" class="form-label">Tanggal Pertemuan</label>
-                                <input type="date" class="form-control @error('tanggal_kegiatan') is-invalid @enderror" id="tanggal_kegiatan" name="tanggal_kegiatan" value="{{ old('tanggal_kegiatan') }}" required>
+                                <input type="date"  class="form-control @error('tanggal_kegiatan') is-invalid @enderror" id="tanggal_kegiatan" name="tanggal_kegiatan" value="{{ old('tanggal_kegiatan') }}" required>
                                 @error('tanggal_kegiatan')
                                     <div class="invalid-feedback">{{ $message }}</div>
                                 @enderror
@@ -198,7 +198,7 @@
                                         <th>Waktu</th>
                                         <th>Lokasi</th>
                                         <th>Kehadiran</th>
-                                        @if(auth()->user()->id_role <= 3)
+                                        @if(auth()->user()->id_role <= 3) 
                                             <th>Aksi</th>
                                         @endif
                                     </tr>
@@ -213,7 +213,7 @@
                                             </td>
                                             <td>{{ $p->lokasi ?: '-' }}</td>
                                             <td>{{ $p->kehadiran->count() }} orang</td>
-                                            @if(auth()->user()->id_role <= 3)
+                                            @if(auth()->user()->id_role <= 3) 
                                                 <td>
                                                     <a href="{{ route('komsel.absensi', $p->id_pelaksanaan) }}" class="btn btn-success btn-sm">
                                                         <i class="fas fa-clipboard-check"></i> Presensi
@@ -233,4 +233,11 @@
         </div>
     </div>
 </div>
+
+
+<script>
+function checkButton() {
+    var date = new Date();
+    
+</script>
 @endsection

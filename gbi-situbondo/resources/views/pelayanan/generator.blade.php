@@ -132,22 +132,7 @@
                                             </div>
                                         </div>
                                         
-                                        <!-- NEW: Recurring Events Selection -->
-                                        <div class="mb-3">
-                                            <label class="form-label">Pilih Kegiatan Recurring:</label>
-                                            <div class="form-text text-muted mb-2">
-                                                Pilih kegiatan ibadah recurring yang ingin di-generate jadwalnya untuk bulan tersebut.
-                                            </div>
-                                            
-                                            <div id="recurring-events-container">
-                                                <div class="text-center py-3">
-                                                    <div class="spinner-border spinner-border-sm" role="status">
-                                                        <span class="visually-hidden">Loading...</span>
-                                                    </div>
-                                                    <span class="ms-2">Memuat kegiatan recurring...</span>
-                                                </div>
-                                            </div>
-                                        </div>
+
                                         
                                         <!-- Monthly Generation Options -->
                                         <div class="row">
@@ -744,11 +729,7 @@
                 const selectedRecurring = $('.recurring-event-checkbox:checked').length;
                 const monthYear = $('input[name="month_year"]').val();
                 
-                if (selectedRecurring === 0) {
-                    e.preventDefault();
-                    alert('Harap pilih minimal satu kegiatan recurring untuk generate bulanan.');
-                    return false;
-                }
+
                 
                 if (!monthYear) {
                     e.preventDefault();

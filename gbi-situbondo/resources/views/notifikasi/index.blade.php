@@ -115,7 +115,7 @@
         </div>
     </div>
 
-    @if(Auth::user()->id_role <= 2)
+    @if(Auth::user()->id_role <= 3)
     <!-- Admin Control Panel -->
     <div class="control-panel">
         <h5 class="mb-3"><i class="fas fa-cogs me-2"></i>Panel Kontrol Notifikasi</h5>

@@ -951,7 +951,7 @@ class PelayananController extends Controller
      */
     public function showGenerator()
     {
-        if (Auth::user()->id_role > 2) {
+        if (Auth::user()->id_role > 3) {
             return redirect()->route('pelayanan.index')
                 ->with('error', 'Anda tidak memiliki akses untuk generate jadwal pelayanan.');
         }
@@ -986,7 +986,7 @@ class PelayananController extends Controller
      */
     public function generateSchedule(Request $request)
     {
-        if (Auth::user()->id_role > 2) {
+        if (Auth::user()->id_role > 3) {
             return redirect()->route('pelayanan.index')
                 ->with('error', 'Anda tidak memiliki akses untuk generate jadwal pelayanan.');
         }
@@ -1171,13 +1171,23 @@ class PelayananController extends Controller
     /**
      * Execute scheduling algorithm - SIMPLIFIED TO 2 ALGORITHMS
      */
-    private function executeSchedulingAlgorithm($anggota, $positions, $pelaksanaan, $algorithm, $request, $workloadTracking = [])
+   private function executeSchedulingAlgorithm($anggota, $positions, $pelaksanaan, $algorithm, $request, $workloadTracking = [])
     {
         $scheduledPositions = [];
         $scheduledMembers = [];
         $conflicts = [];
+        $unfilledPositions = [];
         
-        foreach ($positions as $position) {
+        // FIXED: Sort positions by difficulty (harder to fill positions first)
+        $sortedPositions = collect($positions)->sortBy(function($position) use ($anggota) {
+            $candidateCount = $anggota->filter(function($a) use ($position) {
+                return $a->spesialisasi->contains('posisi', $position);
+            })->count();
+            
+            return $candidateCount; // Positions with fewer candidates go first
+        });
+        
+        foreach ($sortedPositions as $position) {
             $candidates = $this->findEligibleCandidates(
                 $anggota, 
                 $position, 
@@ -1188,6 +1198,7 @@ class PelayananController extends Controller
             );
             
             if ($candidates->isEmpty()) {
+                $unfilledPositions[] = $position;
                 $conflicts[] = "Tidak ada kandidat untuk posisi {$position}";
                 continue;
             }
@@ -1202,7 +1213,9 @@ class PelayananController extends Controller
                     if ($candidates->count() > 1) {
                         $selectedCandidate = $candidates->skip(1)->first();
                     } else {
-                        continue;
+                        // FIXED: Jika tetap tidak ada kandidat, paksa assign yang pertama
+                        Log::warning("Forcing assignment despite consecutive conflict for position: {$position}");
+                        // Keep the first candidate
                     }
                 }
             }
@@ -1223,13 +1236,58 @@ class PelayananController extends Controller
             
             $scheduledPositions[] = $position;
             $scheduledMembers[] = $selectedCandidate->id_anggota;
+            
+            Log::info("Assigned {$selectedCandidate->nama} to {$position} for {$pelaksanaan->tanggal_kegiatan}");
+        }
+        
+        // FIXED: Jika ada posisi yang tidak terisi, coba assign ulang dengan relaxed rules
+        if (!empty($unfilledPositions)) {
+            Log::warning("Attempting to fill unfilled positions with relaxed rules: " . implode(', ', $unfilledPositions));
+            
+            foreach ($unfilledPositions as $position) {
+                // FIXED: Cari kandidat manapun yang punya spesialisasi, ignore availability dan workload
+                $emergencyCandidates = $anggota->filter(function($a) use ($position, $scheduledMembers) {
+                    // Tidak peduli sudah dijadwalkan atau belum, cari yang punya spesialisasi
+                    return $a->spesialisasi->contains('posisi', $position);
+                })->sortByDesc(function($a) use ($position) {
+                    $spec = $a->spesialisasi->where('posisi', $position)->first();
+                    return $spec ? $spec->prioritas : 0;
+                });
+                
+                if ($emergencyCandidates->isNotEmpty()) {
+                    $emergencyCandidate = $emergencyCandidates->first();
+                    
+                    // Create jadwal with emergency assignment
+                    $jadwal = JadwalPelayanan::create([
+                        'id_kegiatan' => $pelaksanaan->id_kegiatan,
+                        'id_pelaksanaan' => $pelaksanaan->id_pelaksanaan,
+                        'tanggal_pelayanan' => $pelaksanaan->tanggal_kegiatan,
+                        'id_anggota' => $emergencyCandidate->id_anggota,
+                        'posisi' => $position,
+                        'status_konfirmasi' => 'belum',
+                        'is_reguler' => $emergencyCandidate->isRegularIn($position),
+                    ]);
+                    
+                    SchedulingHistory::createFromJadwal($jadwal);
+                    
+                    $scheduledPositions[] = $position;
+                    $scheduledMembers[] = $emergencyCandidate->id_anggota;
+                    
+                    // Remove from unfilled list
+                    $unfilledPositions = array_diff($unfilledPositions, [$position]);
+                    
+                    Log::info("Emergency assigned {$emergencyCandidate->nama} to {$position}");
+                    $conflicts[] = "Emergency assignment: {$emergencyCandidate->nama} untuk posisi {$position} (mungkin tidak sesuai ketersediaan)";
+                }
+            }
         }
         
         return [
             'scheduled' => count($scheduledPositions),
             'skipped' => count($positions) - count($scheduledPositions),
             'conflicts' => $conflicts,
-            'scheduled_members' => array_unique($scheduledMembers)
+            'scheduled_members' => array_unique($scheduledMembers),
+            'unfilled_positions' => $unfilledPositions
         ];
     }
     
@@ -1243,14 +1301,14 @@ class PelayananController extends Controller
         $eventEnd = $pelaksanaan->jam_selesai;
         $eventDate = $pelaksanaan->tanggal_kegiatan;
         
-        // Filter basic eligibility
+        // Filter basic eligibility - FIXED: Hanya cek apakah ada spesialisasi, tidak peduli is_reguler
         $eligibleCandidates = $anggota->filter(function ($anggota) use ($position, $scheduledMembers, $eventDay, $eventStart, $eventEnd, $eventDate) {
             // Skip if already scheduled
             if (in_array($anggota->id_anggota, $scheduledMembers)) {
                 return false;
             }
             
-            // Check if they can serve this position
+            // FIXED: Check if they can serve this position - TIDAK peduli is_reguler, yang penting ada spesialisasi
             $hasSpecialization = $anggota->spesialisasi->contains('posisi', $position);
             if (!$hasSpecialization) {
                 return false;
@@ -1263,6 +1321,25 @@ class PelayananController extends Controller
             
             return true;
         });
+        
+        // FIXED: Jika tidak ada kandidat sama sekali, coba cari kandidat dengan prioritas yang lebih rendah
+        if ($eligibleCandidates->isEmpty()) {
+            Log::warning("No eligible candidates found for position: {$position}. Trying fallback candidates...");
+            
+            // Fallback 1: Cari kandidat yang punya spesialisasi tapi tidak available 
+            $fallbackCandidates = $anggota->filter(function ($anggota) use ($position, $scheduledMembers) {
+                if (in_array($anggota->id_anggota, $scheduledMembers)) {
+                    return false;
+                }
+                
+                return $anggota->spesialisasi->contains('posisi', $position);
+            });
+            
+            if ($fallbackCandidates->isNotEmpty()) {
+                Log::info("Found {$fallbackCandidates->count()} fallback candidates for position: {$position}");
+                $eligibleCandidates = $fallbackCandidates;
+            }
+        }
         
         if ($eligibleCandidates->isEmpty()) {
             return collect();
@@ -1281,9 +1358,15 @@ class PelayananController extends Controller
     {
         $score = 0;
         
-        // Base factors
-        $isReguler = $anggota->isRegularIn($position);
-        $prioritas = $anggota->getPriorityFor($position);
+        // FIXED: Base factors - cek apakah ada spesialisasi untuk posisi ini
+        $specialization = $anggota->spesialisasi->where('posisi', $position)->first();
+        
+        if (!$specialization) {
+            return 0; // Tidak punya spesialisasi sama sekali
+        }
+        
+        $isReguler = $specialization->is_reguler;
+        $prioritas = $specialization->prioritas;
         $restDays = $anggota->getRestDays($position);
         $serviceFrequency = $anggota->getServiceFrequency(3, $position); // Last 3 months
         $currentWorkload = $workloadTracking[$anggota->id_anggota] ?? 0;
@@ -1294,7 +1377,7 @@ class PelayananController extends Controller
                 if ($isReguler) {
                     $score += 100;
                 }
-                $score += $prioritas * 10;
+                $score += $prioritas * 10; // FIXED: Gunakan prioritas dari spesialisasi
                 $score += min($restDays / 7, 50); // Bonus for rest days
                 $score -= $serviceFrequency * 5; // Penalty for frequency
                 break;
@@ -1305,10 +1388,13 @@ class PelayananController extends Controller
                 $score += max(100 - $serviceFrequency * 15, 0); // High penalty for recent service
                 $score += min($restDays / 3, 100); // More rest = higher score
                 $score -= $currentWorkload * 30; // Heavy penalty for current workload
+                
+                // FIXED: Berikan bonus berdasarkan prioritas, bukan hanya is_reguler
+                $score += $prioritas * 5; // Bonus berdasarkan skill level
+                
                 if ($isReguler) {
                     $score += 30; // Moderate regular bonus
                 }
-                $score += $prioritas * 5;
                 break;
         }
         

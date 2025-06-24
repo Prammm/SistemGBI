@@ -58,7 +58,7 @@
                                 <i class="fas fa-plus"></i> Tambah Jadwal
                             </a>
                             
-                            @if(Auth::user()->id_role <= 2)
+                            @if(Auth::user()->id_role <= 3)
                                 <a href="{{ route('pelayanan.generator') }}" class="btn btn-success btn-sm">
                                     <i class="fas fa-magic"></i> Generate Jadwal
                                 </a>
