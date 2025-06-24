@@ -183,7 +183,17 @@
                 <div class="card-body">
                     <form method="GET" action="{{ route('laporan.kehadiran') }}" id="filterForm">
                         <div class="row g-3">
-                            <div class="col-md-3">
+                            <div class="col-md-2">
+                                <label for="period" class="form-label">Periode</label>
+                                <select id="period" name="period" class="form-select">
+                                    <option value="1" {{ $period == 1 ? 'selected' : '' }}>1 Bulan</option>
+                                    <option value="3" {{ $period == 3 ? 'selected' : '' }}>3 Bulan</option>
+                                    <option value="6" {{ $period == 6 ? 'selected' : '' }}>6 Bulan</option>
+                                    <option value="12" {{ $period == 12 ? 'selected' : '' }}>1 Tahun</option>
+                                    <option value="custom" {{ !in_array($period, [1, 3, 6, 12]) ? 'selected' : '' }}>Custom</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2" id="customDateFields" style="{{ !in_array($period, [1, 3, 6, 12]) ? '' : 'display: none;' }}">
                                 <label for="bulan" class="form-label">Bulan</label>
                                 <select id="bulan" name="bulan" class="form-select">
                                     @foreach($bulanList as $key => $nama)
@@ -191,7 +201,7 @@
                                     @endforeach
                                 </select>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-2" id="customYearFields" style="{{ !in_array($period, [1, 3, 6, 12]) ? '' : 'display: none;' }}">
                                 <label for="tahun" class="form-label">Tahun</label>
                                 <select id="tahun" name="tahun" class="form-select">
                                     @foreach($tahunList as $t)
@@ -418,6 +428,26 @@
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         // Initialize DataTable
+
+        const periodSelect = document.getElementById('period');
+        const customDateFields = document.getElementById('customDateFields');
+        const customYearFields = document.getElementById('customYearFields');
+
+        if (periodSelect) {
+            periodSelect.addEventListener('change', function() {
+                const selectedPeriod = this.value;
+                if (selectedPeriod === 'custom') {
+                    customDateFields.style.display = '';
+                    customYearFields.style.display = '';
+                } else {
+                    customDateFields.style.display = 'none';
+                    customYearFields.style.display = 'none';
+                    // Auto submit for preset periods
+                    document.getElementById('filterForm').submit();
+                }
+            });
+        }
+
         const kehadiranTable = new simpleDatatables.DataTable("#kehadiranTable", {
             searchable: true,
             sortable: true,

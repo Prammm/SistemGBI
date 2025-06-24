@@ -250,11 +250,6 @@
                                                 <button type="button" class="btn btn-outline-info" onclick="viewDetails({{ $jadwal->id_pelayanan }})" title="Detail">
                                                     <i class="fas fa-eye"></i>
                                                 </button>
-                                                @if(Auth::user()->id_role <= 3)
-                                                    <button type="button" class="btn btn-outline-secondary" onclick="duplicateSchedule({{ $jadwal->id_pelayanan }})" title="Duplicate">
-                                                        <i class="fas fa-copy"></i>
-                                                    </button>
-                                                @endif
                                             </div>
                                         </td>
                                     </tr>

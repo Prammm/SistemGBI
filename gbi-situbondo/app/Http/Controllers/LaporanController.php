@@ -201,10 +201,19 @@ class LaporanController extends Controller
         }
 
         // Get filter parameters
+        $period = $request->input('period', 'custom'); // Tambahkan ini
         $bulan = $request->input('bulan', Carbon::now()->month);
         $tahun = $request->input('tahun', Carbon::now()->year);
         $kegiatan_id = $request->input('kegiatan_id');
         $pelaksanaan_id = $request->input('pelaksanaan_id');
+        
+        // Handle period-based filtering
+        if (in_array($period, [1, 3, 6, 12])) {
+            $endDate = Carbon::now();
+            $startDate = Carbon::now()->subMonths($period);
+            $bulan = $endDate->month;
+            $tahun = $endDate->year;
+        }
         
         // Data untuk filter
         $bulanList = [
@@ -221,17 +230,33 @@ class LaporanController extends Controller
         // Get pelaksanaan for selected kegiatan
         $pelaksanaanList = collect();
         if ($kegiatan_id) {
-            $pelaksanaanList = PelaksanaanKegiatan::where('id_kegiatan', $kegiatan_id)
-                ->whereMonth('tanggal_kegiatan', $bulan)
-                ->whereYear('tanggal_kegiatan', $tahun)
-                ->orderBy('tanggal_kegiatan')
-                ->get();
+            if (in_array($period, [1, 3, 6, 12])) {
+                // For period-based filtering
+                $pelaksanaanList = PelaksanaanKegiatan::where('id_kegiatan', $kegiatan_id)
+                    ->whereBetween('tanggal_kegiatan', [$startDate, $endDate])
+                    ->orderBy('tanggal_kegiatan')
+                    ->get();
+            } else {
+                // For custom month/year filtering
+                $pelaksanaanList = PelaksanaanKegiatan::where('id_kegiatan', $kegiatan_id)
+                    ->whereMonth('tanggal_kegiatan', $bulan)
+                    ->whereYear('tanggal_kegiatan', $tahun)
+                    ->orderBy('tanggal_kegiatan')
+                    ->get();
+            }
         }
         
         // Query data kehadiran berdasarkan filter
-        $kehadiranQuery = Kehadiran::whereMonth('waktu_absensi', $bulan)
-            ->whereYear('waktu_absensi', $tahun)
-            ->with(['anggota', 'pelaksanaan.kegiatan']);
+        if (in_array($period, [1, 3, 6, 12])) {
+            // Period-based filtering
+            $kehadiranQuery = Kehadiran::whereBetween('waktu_absensi', [$startDate, $endDate])
+                ->with(['anggota', 'pelaksanaan.kegiatan']);
+        } else {
+            // Custom month/year filtering
+            $kehadiranQuery = Kehadiran::whereMonth('waktu_absensi', $bulan)
+                ->whereYear('waktu_absensi', $tahun)
+                ->with(['anggota', 'pelaksanaan.kegiatan']);
+        }
         
         if ($kegiatan_id) {
             $kehadiranQuery->whereHas('pelaksanaan', function($query) use ($kegiatan_id) {
@@ -264,23 +289,43 @@ class LaporanController extends Controller
         
         // Kehadiran per minggu
         $kehadiranPerMinggu = [];
-        $startDate = Carbon::createFromDate($tahun, $bulan, 1);
-        $endDate = $startDate->copy()->endOfMonth();
-        
-        for ($week = 1; $week <= 5; $week++) {
-            $weekStart = ($week - 1) * 7 + 1;
-            $weekStartDate = Carbon::createFromDate($tahun, $bulan, $weekStart)->startOfDay();
-            $weekEndDate = $weekStartDate->copy()->addDays(6)->endOfDay();
-            
-            if ($weekStartDate->gt($endDate)) {
-                break;
+        if (in_array($period, [1, 3, 6, 12])) {
+            // For period-based, calculate weekly data from the period
+            $currentDate = $startDate->copy();
+            $weekNumber = 1;
+            while ($currentDate <= $endDate && $weekNumber <= 12) {
+                $weekStart = $currentDate->copy()->startOfWeek();
+                $weekEnd = $currentDate->copy()->endOfWeek();
+                
+                $weeklyCount = Kehadiran::whereBetween('waktu_absensi', [$weekStart, $weekEnd])->count();
+                $kehadiranPerMinggu[] = [
+                    'minggu' => "Minggu $weekNumber",
+                    'jumlah' => $weeklyCount
+                ];
+                
+                $currentDate->addWeek();
+                $weekNumber++;
             }
+        } else {
+            // Original monthly week calculation
+            $startDate = Carbon::createFromDate($tahun, $bulan, 1);
+            $endDate = $startDate->copy()->endOfMonth();
             
-            $weeklyCount = Kehadiran::whereBetween('waktu_absensi', [$weekStartDate, $weekEndDate])->count();
-            $kehadiranPerMinggu[] = [
-                'minggu' => "Minggu $week",
-                'jumlah' => $weeklyCount
-            ];
+            for ($week = 1; $week <= 5; $week++) {
+                $weekStart = ($week - 1) * 7 + 1;
+                $weekStartDate = Carbon::createFromDate($tahun, $bulan, $weekStart)->startOfDay();
+                $weekEndDate = $weekStartDate->copy()->addDays(6)->endOfDay();
+                
+                if ($weekStartDate->gt($endDate)) {
+                    break;
+                }
+                
+                $weeklyCount = Kehadiran::whereBetween('waktu_absensi', [$weekStartDate, $weekEndDate])->count();
+                $kehadiranPerMinggu[] = [
+                    'minggu' => "Minggu $week",
+                    'jumlah' => $weeklyCount
+                ];
+            }
         }
         
         return view('laporan.kehadiran', compact(
@@ -289,6 +334,7 @@ class LaporanController extends Controller
             'tahunList', 
             'bulan', 
             'tahun', 
+            'period', // Tambahkan ini
             'totalAnggota', 
             'totalKehadiran', 
             'kehadiranPerKegiatan',
@@ -305,10 +351,19 @@ class LaporanController extends Controller
         $user = Auth::user();
         
         // Get filter parameters
+        $period = $request->input('period', 'custom'); // Tambahkan ini
         $bulan = $request->input('bulan', Carbon::now()->month);
         $tahun = $request->input('tahun', Carbon::now()->year);
         $kegiatan_id = $request->input('kegiatan_id');
         $pelaksanaan_id = $request->input('pelaksanaan_id');
+        
+        // Handle period-based filtering
+        if (in_array($period, [1, 3, 6, 12])) {
+            $endDate = Carbon::now();
+            $startDate = Carbon::now()->subMonths($period);
+            $bulan = $endDate->month;
+            $tahun = $endDate->year;
+        }
         
         // Data untuk filter
         $bulanList = [
@@ -325,17 +380,33 @@ class LaporanController extends Controller
         // Get pelaksanaan for selected kegiatan
         $pelaksanaanList = collect();
         if ($kegiatan_id) {
-            $pelaksanaanList = PelaksanaanKegiatan::where('id_kegiatan', $kegiatan_id)
-                ->whereMonth('tanggal_kegiatan', $bulan)
-                ->whereYear('tanggal_kegiatan', $tahun)
-                ->orderBy('tanggal_kegiatan')
-                ->get();
+            if (in_array($period, [1, 3, 6, 12])) {
+                // For period-based filtering
+                $pelaksanaanList = PelaksanaanKegiatan::where('id_kegiatan', $kegiatan_id)
+                    ->whereBetween('tanggal_kegiatan', [$startDate, $endDate])
+                    ->orderBy('tanggal_kegiatan')
+                    ->get();
+            } else {
+                // For custom month/year filtering
+                $pelaksanaanList = PelaksanaanKegiatan::where('id_kegiatan', $kegiatan_id)
+                    ->whereMonth('tanggal_kegiatan', $bulan)
+                    ->whereYear('tanggal_kegiatan', $tahun)
+                    ->orderBy('tanggal_kegiatan')
+                    ->get();
+            }
         }
         
         // Query data pelayanan berdasarkan role dan filter
-        $query = JadwalPelayanan::whereMonth('tanggal_pelayanan', $bulan)
-            ->whereYear('tanggal_pelayanan', $tahun)
-            ->with(['anggota', 'kegiatan', 'pelaksanaan']);
+        if (in_array($period, [1, 3, 6, 12])) {
+            // Period-based filtering
+            $query = JadwalPelayanan::whereBetween('tanggal_pelayanan', [$startDate, $endDate])
+                ->with(['anggota', 'kegiatan', 'pelaksanaan']);
+        } else {
+            // Custom month/year filtering
+            $query = JadwalPelayanan::whereMonth('tanggal_pelayanan', $bulan)
+                ->whereYear('tanggal_pelayanan', $tahun)
+                ->with(['anggota', 'kegiatan', 'pelaksanaan']);
+        }
         
         if ($kegiatan_id) {
             $query->where('id_kegiatan', $kegiatan_id);
@@ -395,6 +466,7 @@ class LaporanController extends Controller
             'tahunList', 
             'bulan', 
             'tahun', 
+            'period', // Tambahkan ini
             'totalPelayanan', 
             'totalPelayan', 
             'pelayananPerPosisi',
@@ -405,6 +477,7 @@ class LaporanController extends Controller
             'pelaksanaan_id'
         ));
     }
+
 
     public function komsel(Request $request)
     {
@@ -743,8 +816,16 @@ class LaporanController extends Controller
             $selectedKomsel = $komselLead->first();
         }
         
-        $startDate = $request->input('start_date') ? Carbon::parse($request->input('start_date')) : Carbon::now()->subMonths(3);
-        $endDate = $request->input('end_date') ? Carbon::parse($request->input('end_date')) : Carbon::now();
+        // Handle period parameter
+        $period = $request->input('period', 3); // Default 3 bulan
+        if (in_array($period, [1, 3, 6, 12])) {
+            $startDate = Carbon::now()->subMonths($period);
+            $endDate = Carbon::now();
+        } else {
+            // Custom date range
+            $startDate = $request->input('start_date') ? Carbon::parse($request->input('start_date')) : Carbon::now()->subMonths(3);
+            $endDate = $request->input('end_date') ? Carbon::parse($request->input('end_date')) : Carbon::now();
+        }
         
         // Get komsel activities
         $komselActivityName = 'Komsel - ' . $selectedKomsel->nama_komsel;
@@ -791,6 +872,7 @@ class LaporanController extends Controller
             'attendanceStats',
             'startDate',
             'endDate',
+            'period', // Tambahkan ini
             'canSelectUser',
             'komselLeaders',
             'selectedUserId',

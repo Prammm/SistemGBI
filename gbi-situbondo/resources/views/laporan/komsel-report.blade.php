@@ -473,8 +473,18 @@
                         <input type="hidden" id="komsel_id" name="komsel_id" value="">
                     </div>
                     <div class="form-group">
-                        <label for="start_date">Tanggal Mulai:</label>
-                        <input type="date" id="start_date" name="start_date" class="form-control" value="{{ $startDate->format('Y-m-d') }}">
+                        <label for="period_admin">Periode:</label>
+                        <select id="period_admin" name="period" class="form-select">
+                            <option value="1" {{ $period == 1 ? 'selected' : '' }}>1 Bulan</option>
+                            <option value="3" {{ $period == 3 ? 'selected' : '' }}>3 Bulan</option>
+                            <option value="6" {{ $period == 6 ? 'selected' : '' }}>6 Bulan</option>
+                            <option value="12" {{ $period == 12 ? 'selected' : '' }}>1 Tahun</option>
+                            <option value="custom" {{ !in_array($period, [1, 3, 6, 12]) ? 'selected' : '' }}>Custom</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="customAdminDate" style="{{ !in_array($period, [1, 3, 6, 12]) ? '' : 'display: none;' }}">
+                        <label for="start_date_admin">Tanggal Mulai:</label>
+                        <input type="date" id="start_date_admin" name="start_date" class="form-control" value="{{ $startDate->format('Y-m-d') }}">
                     </div>
                     <div>
                         <button type="submit" class="btn btn-light">
@@ -516,7 +526,7 @@
     @if(!$canSelectUser || !$selectedUserId)
         <div class="komsel-selector">
             <h5><i class="fas fa-filter me-2"></i>Filter Laporan</h5>
-            <form method="GET" action="{{ route('laporan.komsel-report') }}">
+            <form method="GET" action="{{ route('laporan.komsel-report') }}" id="komselFilterForm">
                 <div class="filter-section">
                     @if($komselLead->count() > 1)
                         <div class="flex-fill">
@@ -531,10 +541,20 @@
                         </div>
                     @endif
                     <div>
+                        <label for="period" class="form-label">Periode</label>
+                        <select id="period" name="period" class="form-select">
+                            <option value="1" {{ $period == 1 ? 'selected' : '' }}>1 Bulan</option>
+                            <option value="3" {{ $period == 3 ? 'selected' : '' }}>3 Bulan</option>
+                            <option value="6" {{ $period == 6 ? 'selected' : '' }}>6 Bulan</option>
+                            <option value="12" {{ $period == 12 ? 'selected' : '' }}>1 Tahun</option>
+                            <option value="custom" {{ !in_array($period, [1, 3, 6, 12]) ? 'selected' : '' }}>Custom</option>
+                        </select>
+                    </div>
+                    <div id="customStartDate" style="{{ !in_array($period, [1, 3, 6, 12]) ? '' : 'display: none;' }}">
                         <label for="start_date" class="form-label">Tanggal Mulai</label>
                         <input type="date" id="start_date" name="start_date" class="form-control" value="{{ $startDate->format('Y-m-d') }}">
                     </div>
-                    <div>
+                    <div id="customEndDate" style="{{ !in_array($period, [1, 3, 6, 12]) ? '' : 'display: none;' }}">
                         <label for="end_date" class="form-label">Tanggal Selesai</label>
                         <input type="date" id="end_date" name="end_date" class="form-control" value="{{ $endDate->format('Y-m-d') }}">
                     </div>
@@ -736,6 +756,24 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    const periodSelect = document.getElementById('period');
+    const customStartDate = document.getElementById('customStartDate');
+    const customEndDate = document.getElementById('customEndDate');
+    
+    if (periodSelect) {
+        periodSelect.addEventListener('change', function() {
+            const selectedPeriod = this.value;
+            if (selectedPeriod === 'custom') {
+                if (customStartDate) customStartDate.style.display = '';
+                if (customEndDate) customEndDate.style.display = '';
+            } else {
+                if (customStartDate) customStartDate.style.display = 'none';
+                if (customEndDate) customEndDate.style.display = 'none';
+                // Auto submit for preset periods
+                document.getElementById('komselFilterForm').submit();
+            }
+        });
+    }
     // Initialize DataTable
     @if($pelaksanaanKomsel->count() > 0)
         const pertemuanTable = new simpleDatatables.DataTable("#pertemuanTable", {
