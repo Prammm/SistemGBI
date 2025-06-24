@@ -152,7 +152,145 @@ class KomselController extends Controller
                 ->get();
         }
         
-        return view('komsel.show', compact('komsel', 'pertemuan', 'kegiatan'));
+        // Get current pertemuan for attendance view (latest or selected)
+        $currentPertemuan = null;
+        $selectedPertemuanId = request('pertemuan_id');
+        
+        if ($selectedPertemuanId) {
+            $currentPertemuan = $pertemuan->firstWhere('id_pelaksanaan', $selectedPertemuanId);
+        } else {
+            $currentPertemuan = $pertemuan->first();
+        }
+        
+        // Get previous and next pertemuan for navigation
+        $previousPertemuan = null;
+        $nextPertemuan = null;
+        
+        if ($currentPertemuan && $kegiatan) {
+            $allPertemuan = PelaksanaanKegiatan::where('id_kegiatan', $kegiatan->id_kegiatan)
+                ->orderBy('tanggal_kegiatan', 'asc')
+                ->get();
+                
+            $currentIndex = $allPertemuan->search(function($item) use ($currentPertemuan) {
+                return $item->id_pelaksanaan == $currentPertemuan->id_pelaksanaan;
+            });
+            
+            if ($currentIndex !== false) {
+                if ($currentIndex > 0) {
+                    $previousPertemuan = $allPertemuan[$currentIndex - 1];
+                }
+                if ($currentIndex < $allPertemuan->count() - 1) {
+                    $nextPertemuan = $allPertemuan[$currentIndex + 1];
+                }
+            }
+        }
+        
+        // Get attendance for current pertemuan
+        $attendanceData = [];
+        if ($currentPertemuan) {
+            $attendanceData = $this->getAttendanceData($komsel, $currentPertemuan);
+        }
+        
+        return view('komsel.show', compact(
+            'komsel', 
+            'pertemuan', 
+            'kegiatan', 
+            'currentPertemuan', 
+            'previousPertemuan', 
+            'nextPertemuan',
+            'attendanceData'
+        ));
+    }
+
+    /**
+     * Helper method to check if user can view anggota profile
+     */
+    private function canViewAnggotaProfile($targetAnggotaId)
+    {
+        $user = auth()->user();
+        
+        // Admin can view all profiles
+        if ($user->id_role <= 1) {
+            return true;
+        }
+        
+        // User can view their own profile
+        if ($user->id_anggota == $targetAnggotaId) {
+            return true;
+        }
+        
+        // If user is not an anggota, deny access
+        if (!$user->anggota) {
+            return false;
+        }
+        
+        // Komsel leaders can view their members' profiles
+        $userKomselAsLeader = Komsel::where('id_pemimpin', $user->id_anggota)->get();
+        
+        foreach ($userKomselAsLeader as $komsel) {
+            if ($komsel->anggota->contains('id_anggota', $targetAnggotaId)) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+
+    /**
+     * Get attendance data for a specific pertemuan
+     */
+    private function getAttendanceData($komsel, $pertemuan)
+    {
+        $attendanceData = [];
+        
+        foreach ($komsel->anggota as $anggota) {
+            $kehadiran = DB::table('kehadiran')
+                ->where('id_anggota', $anggota->id_anggota)
+                ->where('id_pelaksanaan', $pertemuan->id_pelaksanaan)
+                ->first();
+            
+            $contactInfo = $this->getContactInfo($anggota);
+            
+            $attendanceData[] = [
+                'anggota' => $anggota,
+                'hadir' => $kehadiran ? true : false,
+                'kehadiran' => $kehadiran,
+                'contact_info' => $contactInfo,
+                'can_view_profile' => $this->canViewAnggotaProfile($anggota->id_anggota)
+            ];
+        }
+        
+        return $attendanceData;
+    }
+
+    /**
+     * Get contact information for an anggota
+     */
+    private function getContactInfo($anggota)
+    {
+        $contactInfo = [
+            'has_phone' => !empty($anggota->no_telepon),
+            'has_email' => !empty($anggota->email),
+            'phone' => $anggota->no_telepon,
+            'email' => $anggota->email,
+            'whatsapp_url' => null,
+            'contact_message' => null
+        ];
+        
+        if ($contactInfo['has_phone']) {
+            // Clean phone number for WhatsApp
+            $cleanPhone = preg_replace('/[^0-9]/', '', $anggota->no_telepon);
+            if (substr($cleanPhone, 0, 1) === '0') {
+                $cleanPhone = '62' . substr($cleanPhone, 1);
+            }
+            $contactInfo['whatsapp_url'] = "https://wa.me/{$cleanPhone}";
+        } elseif ($contactInfo['has_email']) {
+            $contactInfo['contact_message'] = "Hubungi melalui email: {$anggota->email}";
+        } else {
+            $contactInfo['contact_message'] = "Anggota tidak mencantumkan nomor HP atau email. Harap perbarui data kontak anggota di sistem.";
+        }
+        
+        return $contactInfo;
     }
 
     public function edit(Komsel $komsel)
@@ -387,6 +525,12 @@ class KomselController extends Controller
                 ->with('error', 'Pelaksanaan kegiatan bukan merupakan pertemuan komsel.');
         }
         
+        // Check if meeting has started - NEW FEATURE
+        $meetingDate = Carbon::parse($pelaksanaan->tanggal_kegiatan)->format('Y-m-d');
+        $meetingTime = Carbon::parse($pelaksanaan->jam_mulai)->format('H:i:s');
+        $meetingDateTime = Carbon::parse($meetingDate . ' ' . $meetingTime);
+        $canTakeAttendance = Carbon::now()->gte($meetingDateTime);
+        
         // Extract komsel name from kegiatan
         $komselName = str_replace('Komsel - ', '', $pelaksanaan->kegiatan->nama_kegiatan);
         
@@ -407,11 +551,26 @@ class KomselController extends Controller
             ->pluck('id_anggota')
             ->toArray();
             
-        return view('komsel.absensi', compact('pelaksanaan', 'komsel', 'anggota', 'kehadiran'));
+        return view('komsel.absensi', compact(
+            'pelaksanaan', 
+            'komsel', 
+            'anggota', 
+            'kehadiran', 
+            'canTakeAttendance'
+        ));
     }
     
     public function storeAbsensi(Request $request, PelaksanaanKegiatan $pelaksanaan)
     {
+        // Check if meeting has started - NEW VALIDATION
+        $meetingDate = Carbon::parse($pelaksanaan->tanggal_kegiatan)->format('Y-m-d');
+        $meetingTime = Carbon::parse($pelaksanaan->jam_mulai)->format('H:i:s');
+        $meetingDateTime = Carbon::parse($meetingDate . ' ' . $meetingTime);
+        if (Carbon::now()->lt($meetingDateTime)) {
+            return redirect()->back()
+                ->with('error', 'Presensi tidak dapat dilakukan sebelum kegiatan dimulai.');
+        }
+
         $validator = Validator::make($request->all(), [
             'anggota' => 'nullable|array',
             'anggota.*' => 'exists:anggota,id_anggota',

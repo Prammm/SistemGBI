@@ -24,6 +24,15 @@
         </div>
     @endif
     
+    <!-- NEW: Check if meeting can be attended -->
+    @if(!$canTakeAttendance)
+        <div class="alert alert-warning">
+            <i class="fas fa-clock"></i>
+            <strong>Perhatian:</strong> Presensi tidak dapat dilakukan karena kegiatan belum dimulai. 
+            Kegiatan akan dimulai pada {{ \Carbon\Carbon::parse($pelaksanaan->tanggal_kegiatan)->format('d/m/Y') }} {{ \Carbon\Carbon::parse($pelaksanaan->jam_mulai)->format('H:i') }}.
+        </div>
+    @endif
+    
     <div class="row">
         <div class="col-xl-12">
             <div class="card mb-4">
@@ -56,7 +65,7 @@
                             <label class="form-label">Daftar Anggota</label>
                             <div class="mb-2">
                                 <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="selectAll">
+                                    <input class="form-check-input" type="checkbox" id="selectAll" {{ !$canTakeAttendance ? 'disabled' : '' }}>
                                     <label class="form-check-label fw-bold" for="selectAll">
                                         Pilih Semua
                                     </label>
@@ -69,7 +78,13 @@
                                             <div class="col-md-4">
                                                 @foreach($chunk as $a)
                                                     <div class="form-check mb-2">
-                                                        <input class="form-check-input anggota-checkbox" type="checkbox" id="anggota_{{ $a->id_anggota }}" name="anggota[]" value="{{ $a->id_anggota }}" {{ in_array($a->id_anggota, $kehadiran) ? 'checked' : '' }}>
+                                                        <input class="form-check-input anggota-checkbox" 
+                                                               type="checkbox" 
+                                                               id="anggota_{{ $a->id_anggota }}" 
+                                                               name="anggota[]" 
+                                                               value="{{ $a->id_anggota }}" 
+                                                               {{ in_array($a->id_anggota, $kehadiran) ? 'checked' : '' }}
+                                                               {{ !$canTakeAttendance ? 'disabled' : '' }}>
                                                         <label class="form-check-label" for="anggota_{{ $a->id_anggota }}">
                                                             {{ $a->nama }}
                                                             @if($komsel->pemimpin && $a->id_anggota == $komsel->pemimpin->id_anggota)
@@ -86,7 +101,9 @@
                         </div>
                         
                         <div class="mb-3">
-                            <button type="submit" class="btn btn-primary">
+                            <button type="submit" 
+                                    class="btn btn-primary {{ !$canTakeAttendance ? 'disabled' : '' }}"
+                                    {{ !$canTakeAttendance ? 'disabled' : '' }}>
                                 <i class="fas fa-save"></i> Simpan Presensi
                             </button>
                             <a href="{{ route('komsel.show', $komsel->id_komsel) }}" class="btn btn-secondary">
@@ -104,24 +121,27 @@
 @section('scripts')
 <script>
     $(document).ready(function() {
-        // Handle select all checkbox
-        $('#selectAll').click(function() {
-            $('.anggota-checkbox').prop('checked', this.checked);
-        });
-        
-        // Update selectAll status based on individual checkboxes
-        $('.anggota-checkbox').click(function() {
-            if($('.anggota-checkbox:checked').length == $('.anggota-checkbox').length) {
+        // Only enable JavaScript interactions if attendance can be taken
+        @if($canTakeAttendance)
+            // Handle select all checkbox
+            $('#selectAll').click(function() {
+                $('.anggota-checkbox').prop('checked', this.checked);
+            });
+            
+            // Update selectAll status based on individual checkboxes
+            $('.anggota-checkbox').click(function() {
+                if($('.anggota-checkbox:checked').length == $('.anggota-checkbox').length) {
+                    $('#selectAll').prop('checked', true);
+                } else {
+                    $('#selectAll').prop('checked', false);
+                }
+            });
+            
+            // Set initial state of selectAll
+            if($('.anggota-checkbox:checked').length == $('.anggota-checkbox').length && $('.anggota-checkbox').length > 0) {
                 $('#selectAll').prop('checked', true);
-            } else {
-                $('#selectAll').prop('checked', false);
             }
-        });
-        
-        // Set initial state of selectAll
-        if($('.anggota-checkbox:checked').length == $('.anggota-checkbox').length && $('.anggota-checkbox').length > 0) {
-            $('#selectAll').prop('checked', true);
-        }
+        @endif
     });
 </script>
 @endsection

@@ -378,6 +378,7 @@ Route::middleware(['auth'])->group(function () {
     Route::delete('keluarga/{keluarga}/remove-member/{anggota}', [KeluargaController::class, 'removeMember'])->name('keluarga.remove-member');
     
     // Komsel management
+    Route::get('komsel/{komsel}/kehadiran/{pertemuan}', [KomselController::class, 'showKehadiran'])->name('komsel.show-kehadiran'); 
     Route::post('komsel/{komsel}/pertemuan', [KomselController::class, 'tambahPertemuan'])->name('komsel.tambah-pertemuan');
     Route::get('komsel/{komsel}/jadwalkan', [KomselController::class, 'jadwalkanPertemuan'])->name('komsel.jadwalkan');
     Route::get('komsel/absensi/{pelaksanaan}', [KomselController::class, 'absensi'])->name('komsel.absensi');

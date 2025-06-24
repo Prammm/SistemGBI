@@ -39,9 +39,37 @@
                         <div class="col-md-4 fw-bold">Pemimpin</div>
                         <div class="col-md-8">
                             @if($komsel->pemimpin)
-                                <a href="{{ route('anggota.show', $komsel->pemimpin->id_anggota) }}">
+                                @php
+                                    $user = auth()->user();
+                                    $canViewProfile = false;
+                                    
+                                    // Admin can view all profiles
+                                    if ($user->id_role <= 1) {
+                                        $canViewProfile = true;
+                                    }
+                                    // User can view their own profile
+                                    elseif ($user->id_anggota == $komsel->pemimpin->id_anggota) {
+                                        $canViewProfile = true;
+                                    }
+                                    // Komsel leaders can view their members' profiles
+                                    elseif ($user->anggota) {
+                                        $userKomselAsLeader = App\Models\Komsel::where('id_pemimpin', $user->id_anggota)->get();
+                                        foreach ($userKomselAsLeader as $userKomsel) {
+                                            if ($userKomsel->anggota->contains('id_anggota', $komsel->pemimpin->id_anggota)) {
+                                                $canViewProfile = true;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                @endphp
+                                
+                                @if($canViewProfile)
+                                    <a href="{{ route('anggota.show', $komsel->pemimpin->id_anggota) }}">
+                                        {{ $komsel->pemimpin->nama }}
+                                    </a>
+                                @else
                                     {{ $komsel->pemimpin->nama }}
-                                </a>
+                                @endif
                             @else
                                 <span class="text-muted">Belum ada pemimpin</span>
                             @endif
@@ -156,9 +184,34 @@
                                     @foreach($komsel->anggota as $a)
                                         <tr>
                                             <td>
-                                                <a href="{{ route('anggota.show', $a->id_anggota) }}">
+                                                @php
+                                                    $user = auth()->user();
+                                                    $canViewProfile = false;
+                                                    
+                                                    // Admin can view all profiles
+                                                    if ($user->id_role <= 1) {
+                                                        $canViewProfile = true;
+                                                    }
+                                                    // Komsel leaders can view their members' profiles
+                                                    elseif ($user->anggota) {
+                                                        $userKomselAsLeader = App\Models\Komsel::where('id_pemimpin', $user->id_anggota)->get();
+                                                        foreach ($userKomselAsLeader as $userKomsel) {
+                                                            if ($userKomsel->anggota->contains('id_anggota', $a->id_anggota)) {
+                                                                $canViewProfile = true;
+                                                                break;
+                                                            }
+                                                        }
+                                                    }
+                                                @endphp
+                                                
+                                                @if($canViewProfile)
+                                                    <a href="{{ route('anggota.show', $a->id_anggota) }}">
+                                                        {{ $a->nama }}
+                                                    </a>
+                                                @else
                                                     {{ $a->nama }}
-                                                </a>
+                                                @endif
+                                                
                                                 @if($komsel->pemimpin && $a->id_anggota == $komsel->pemimpin->id_anggota)
                                                     <span class="badge bg-success">Pemimpin</span>
                                                 @endif
@@ -183,6 +236,129 @@
                 @endif
             </div>
             
+            <!-- NEW: Attendance Table per Date -->
+            @if($currentPertemuan)
+                <div class="card mb-4">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <div>
+                            <i class="fas fa-clipboard-check me-1"></i>
+                            Kehadiran Pertemuan
+                        </div>
+                        <div class="btn-group btn-group-sm">
+                            @if($previousPertemuan)
+                                <a href="{{ route('komsel.show', ['komsel' => $komsel->id_komsel, 'pertemuan_id' => $previousPertemuan->id_pelaksanaan]) }}" 
+                                   class="btn btn-outline-secondary">
+                                    <i class="fas fa-chevron-left"></i>
+                                </a>
+                            @endif
+                            @if($nextPertemuan)
+                                <a href="{{ route('komsel.show', ['komsel' => $komsel->id_komsel, 'pertemuan_id' => $nextPertemuan->id_pelaksanaan]) }}" 
+                                   class="btn btn-outline-secondary">
+                                    <i class="fas fa-chevron-right"></i>
+                                </a>
+                            @endif
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <strong>Tanggal:</strong> {{ \Carbon\Carbon::parse($currentPertemuan->tanggal_kegiatan)->format('d/m/Y') }} <br>
+                            <strong>Waktu:</strong> {{ \Carbon\Carbon::parse($currentPertemuan->jam_mulai)->format('H:i') }} - {{ \Carbon\Carbon::parse($currentPertemuan->jam_selesai)->format('H:i') }} <br>
+                            <strong>Lokasi:</strong> {{ $currentPertemuan->lokasi ?: $komsel->lokasi ?: '-' }}
+                        </div>
+                        
+                        @if(count($attendanceData) > 0)
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Nama</th>
+                                            <th>Status</th>
+                                            <th>Kontak</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach($attendanceData as $data)
+                                            <tr class="{{ !$data['hadir'] ? 'table-danger' : '' }}">
+                                                <td>
+                                                    @if($data['can_view_profile'])
+                                                       {{ $data['anggota']->nama }}
+                                                    @else
+                                                        {{ $data['anggota']->nama }}
+                                                    @endif
+                                                    
+                                                    @if($komsel->pemimpin && $data['anggota']->id_anggota == $komsel->pemimpin->id_anggota)
+                                                        <span class="badge bg-success ms-1">Pemimpin</span>
+                                                    @endif
+                                                </td>
+                                                <td>
+                                                    @if($data['hadir'])
+                                                        <span class="badge bg-success">Hadir</span>
+                                                    @else
+                                                        <span class="badge bg-danger">Tidak Hadir</span>
+                                                    @endif
+                                                </td>
+                                                <td>
+                                                    @if(!$data['hadir'])
+                                                        @if($data['contact_info']['has_phone'])
+                                                            <a href="{{ $data['contact_info']['whatsapp_url'] }}" 
+                                                               target="_blank" 
+                                                               class="btn btn-success btn-sm">
+                                                                <i class="fab fa-whatsapp"></i> WhatsApp
+                                                            </a>
+                                                        @elseif($data['contact_info']['has_email'])
+                                                            <small class="text-warning">
+                                                                <i class="fas fa-envelope"></i>
+                                                                {{ $data['contact_info']['contact_message'] }}
+                                                            </small>
+                                                        @else
+                                                            <small class="text-danger">
+                                                                <i class="fas fa-exclamation-triangle"></i>
+                                                                {{ $data['contact_info']['contact_message'] }}
+                                                            </small>
+                                                        @endif
+                                                    @else
+                                                        -
+                                                    @endif
+                                                </td>
+                                            </tr>
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            </div>
+                        @else
+                            <p class="text-center">Belum ada data kehadiran untuk pertemuan ini.</p>
+                        @endif
+                        
+                        @if(auth()->user()->id_role <= 3)
+                            @php
+                                $meetingDate = \Carbon\Carbon::parse($currentPertemuan->tanggal_kegiatan)->format('Y-m-d');
+                                $meetingTime = \Carbon\Carbon::parse($currentPertemuan->jam_mulai)->format('H:i:s');
+                                $meetingDateTime = \Carbon\Carbon::parse($meetingDate . ' ' . $meetingTime);
+                                $canTakeAttendance = \Carbon\Carbon::now()->gte($meetingDateTime);
+                            @endphp
+                            
+                            <div class="mt-3">
+                                <a href="{{ route('komsel.absensi', $currentPertemuan->id_pelaksanaan) }}" 
+                                   class="btn btn-primary {{ !$canTakeAttendance ? 'disabled' : '' }}"
+                                   @if(!$canTakeAttendance) aria-disabled="true" @endif>
+                                    <i class="fas fa-clipboard-check"></i> 
+                                    @if(!$canTakeAttendance)
+                                        Presensi (Belum Dimulai)
+                                    @else
+                                        Kelola Presensi
+                                    @endif
+                                </a>
+                                @if(!$canTakeAttendance)
+                                    <small class="text-muted d-block mt-1">
+                                        Presensi dapat dilakukan setelah {{ $meetingDateTime->format('d/m/Y H:i') }}
+                                    </small>
+                                @endif
+                            </div>
+                        @endif
+                    </div>
+                </div>
+            @endif
+            
             <div class="card mb-4">
                 <div class="card-header">
                     <i class="fas fa-calendar-alt me-1"></i>
@@ -205,8 +381,13 @@
                                 </thead>
                                 <tbody>
                                     @foreach($pertemuan as $p)
-                                        <tr>
-                                            <td>{{ \Carbon\Carbon::parse($p->tanggal_kegiatan)->format('d/m/Y') }}</td>
+                                        <tr class="{{ $currentPertemuan && $p->id_pelaksanaan == $currentPertemuan->id_pelaksanaan ? 'table-info' : '' }}">
+                                            <td>
+                                                <a href="{{ route('komsel.show', ['komsel' => $komsel->id_komsel, 'pertemuan_id' => $p->id_pelaksanaan]) }}"
+                                                   class="text-decoration-none">
+                                                    {{ \Carbon\Carbon::parse($p->tanggal_kegiatan)->format('d/m/Y') }}
+                                                </a>
+                                            </td>
                                             <td>
                                                 {{ \Carbon\Carbon::parse($p->jam_mulai)->format('H:i') }} - 
                                                 {{ \Carbon\Carbon::parse($p->jam_selesai)->format('H:i') }}
@@ -215,8 +396,22 @@
                                             <td>{{ $p->kehadiran->count() }} orang</td>
                                             @if(auth()->user()->id_role <= 3) 
                                                 <td>
-                                                    <a href="{{ route('komsel.absensi', $p->id_pelaksanaan) }}" class="btn btn-success btn-sm">
-                                                        <i class="fas fa-clipboard-check"></i> Presensi
+                                                    @php
+                                                        $meetingDate = \Carbon\Carbon::parse($p->tanggal_kegiatan)->format('Y-m-d');
+                                                        $meetingTime = \Carbon\Carbon::parse($p->jam_mulai)->format('H:i:s');
+                                                        $meetingDateTime = \Carbon\Carbon::parse($meetingDate . ' ' . $meetingTime);
+                                                        $canTakeAttendance = \Carbon\Carbon::now()->gte($meetingDateTime);
+                                                    @endphp
+                                                    
+                                                    <a href="{{ route('komsel.absensi', $p->id_pelaksanaan) }}" 
+                                                       class="btn btn-success btn-sm {{ !$canTakeAttendance ? 'disabled' : '' }}"
+                                                       @if(!$canTakeAttendance) aria-disabled="true" @endif>
+                                                        <i class="fas fa-clipboard-check"></i> 
+                                                        @if(!$canTakeAttendance)
+                                                            Belum Dimulai
+                                                        @else
+                                                            Presensi
+                                                        @endif
                                                     </a>
                                                 </td>
                                             @endif
@@ -233,11 +428,4 @@
         </div>
     </div>
 </div>
-
-
-<script>
-function checkButton() {
-    var date = new Date();
-    
-</script>
 @endsection

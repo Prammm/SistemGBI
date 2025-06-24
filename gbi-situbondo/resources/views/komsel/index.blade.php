@@ -51,9 +51,37 @@
                                 <td>{{ $k->nama_komsel }}</td>
                                 <td>
                                     @if($k->pemimpin)
-                                        <a href="{{ route('anggota.show', $k->pemimpin->id_anggota) }}">
+                                        @php
+                                            $user = auth()->user();
+                                            $canViewProfile = false;
+                                            
+                                            // Admin can view all profiles
+                                            if ($user->id_role <= 1) {
+                                                $canViewProfile = true;
+                                            }
+                                            // User can view their own profile
+                                            elseif ($user->id_anggota == $k->pemimpin->id_anggota) {
+                                                $canViewProfile = true;
+                                            }
+                                            // Komsel leaders can view their members' profiles
+                                            elseif ($user->anggota) {
+                                                $userKomselAsLeader = App\Models\Komsel::where('id_pemimpin', $user->id_anggota)->get();
+                                                foreach ($userKomselAsLeader as $komsel) {
+                                                    if ($komsel->anggota->contains('id_anggota', $k->pemimpin->id_anggota)) {
+                                                        $canViewProfile = true;
+                                                        break;
+                                                    }
+                                                }
+                                            }
+                                        @endphp
+                                        
+                                        @if($canViewProfile)
+                                            <a href="{{ route('anggota.show', $k->pemimpin->id_anggota) }}">
+                                                {{ $k->pemimpin->nama }}
+                                            </a>
+                                        @else
                                             {{ $k->pemimpin->nama }}
-                                        </a>
+                                        @endif
                                     @else
                                         -
                                     @endif
