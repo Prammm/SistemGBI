@@ -60,6 +60,20 @@
                                 $isToday = $tanggalKegiatan->isToday();
                                 $isPast = $tanggalKegiatan->isPast() && !$isToday;
                                 
+                                // Check if attendance can be taken
+                                try {
+                                    $eventStartTime = $tanggalKegiatan->copy()->setTimeFromTimeString($p->jam_mulai);
+                                    $eventEndTime = $tanggalKegiatan->copy()->setTimeFromTimeString($p->jam_selesai);
+                                } catch (\Exception $e) {
+                                    $eventStartTime = \Carbon\Carbon::createFromFormat('Y-m-d H:i', 
+                                        $tanggalKegiatan->format('Y-m-d') . ' ' . substr($p->jam_mulai, 0, 5));
+                                    $eventEndTime = \Carbon\Carbon::createFromFormat('Y-m-d H:i', 
+                                        $tanggalKegiatan->format('Y-m-d') . ' ' . substr($p->jam_selesai, 0, 5));
+                                }
+                                $now = \Carbon\Carbon::now();
+                                $canTakeAttendance = $now->gte($eventStartTime) && $now->lte($eventEndTime);
+                                $isPastEvent = $eventEndTime->isPast();
+                                
                                 // Create proper sort value: YYYYMMDD format for proper sorting
                                 $sortValue = $tanggalKegiatan->format('Ymd');
                             @endphp
@@ -123,10 +137,17 @@
                                                class="btn btn-warning btn-sm" title="Edit">
                                                 <i class="fas fa-edit"></i>
                                             </a>
-                                            <a href="{{ route('kehadiran.create', ['id_pelaksanaan' => $p->id_pelaksanaan]) }}" 
-                                               class="btn btn-success btn-sm" title="Presensi">
-                                                <i class="fas fa-clipboard-check"></i>
-                                            </a>
+                                            @if($canTakeAttendance || $isPastEvent)
+                                                <a href="{{ route('kehadiran.create', ['id_pelaksanaan' => $p->id_pelaksanaan]) }}" 
+                                                   class="btn btn-success btn-sm" title="Presensi">
+                                                    <i class="fas fa-clipboard-check"></i>
+                                                </a>
+                                            @else
+                                                <button class="btn btn-secondary btn-sm" disabled 
+                                                        title="Presensi belum dapat dilakukan (kegiatan belum dimulai)">
+                                                    <i class="fas fa-clipboard-check"></i>
+                                                </button>
+                                            @endif
                                         </div>
                                         
                                         <div class="btn-group mt-1" role="group">
@@ -225,6 +246,9 @@
     }
     .table-warning td {
         background-color: #fff3cd !important;
+    }
+    .btn[disabled] {
+        cursor: not-allowed;
     }
 </style>
 @endsection

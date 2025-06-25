@@ -121,13 +121,38 @@
                     @endif
                 </div>
                 <div class="card-footer">
-                    <a href="{{ route('kehadiran.create', ['id_pelaksanaan' => $pelaksanaan->id_pelaksanaan]) }}" class="btn btn-success">
-                        <i class="fas fa-clipboard-check"></i> Presensi
-                    </a>
+                    @php
+                        $eventDate = \Carbon\Carbon::parse($pelaksanaan->tanggal_kegiatan);
+                        try {
+                            $eventStartTime = $eventDate->copy()->setTimeFromTimeString($pelaksanaan->jam_mulai);
+                            $eventEndTime = $eventDate->copy()->setTimeFromTimeString($pelaksanaan->jam_selesai);
+                        } catch (\Exception $e) {
+                            $eventStartTime = \Carbon\Carbon::createFromFormat('Y-m-d H:i', 
+                                $eventDate->format('Y-m-d') . ' ' . substr($pelaksanaan->jam_mulai, 0, 5));
+                            $eventEndTime = \Carbon\Carbon::createFromFormat('Y-m-d H:i', 
+                                $eventDate->format('Y-m-d') . ' ' . substr($pelaksanaan->jam_selesai, 0, 5));
+                        }
+                        $now = \Carbon\Carbon::now();
+                        $canTakeAttendance = $now->gte($eventStartTime) && $now->lte($eventEndTime);
+                        $isPast = $eventEndTime->isPast();
+                    @endphp
+                    
+                    @if($canTakeAttendance || $isPast)
+                        <a href="{{ route('kehadiran.create', ['id_pelaksanaan' => $pelaksanaan->id_pelaksanaan]) }}" class="btn btn-success">
+                            <i class="fas fa-clipboard-check"></i> Presensi
+                        </a>
+                    @else
+                        <button class="btn btn-secondary" disabled title="Presensi belum dapat dilakukan (kegiatan belum dimulai)">
+                            <i class="fas fa-clipboard-check"></i> Presensi
+                            @if($now->lt($eventStartTime))
+                                ({{ round($now->diffInMinutes($eventStartTime)) }} menit lagi)
+                            @endif
+                        </button>
+                    @endif
+                    
                     <a href="{{ route('pelaksanaan.index') }}" class="btn btn-secondary">
                         <i class="fas fa-arrow-left"></i> Kembali
                     </a>
-                    
                 </div>
             </div>
         </div>
@@ -153,9 +178,37 @@
                                     @foreach($pelaksanaan->kehadiran->sortBy('anggota.nama') as $kehadiran)
                                         <tr>
                                             <td>
-                                                <a href="{{ route('anggota.show', $kehadiran->anggota->id_anggota) }}">
+                                                @php
+                                                    $user = auth()->user();
+                                                    $canViewProfile = false;
+                                                    
+                                                    // Admin can view all profiles
+                                                    if ($user->id_role <= 1) {
+                                                        $canViewProfile = true;
+                                                    }
+                                                    // User can view their own profile
+                                                    elseif ($user->id_anggota == $kehadiran->anggota->id_anggota) {
+                                                        $canViewProfile = true;
+                                                    }
+                                                    // Komsel leaders can view their members' profiles (if this is komsel activity)
+                                                    elseif ($user->anggota && $pelaksanaan->kegiatan->tipe_kegiatan == 'komsel') {
+                                                        $komselName = str_replace('Komsel - ', '', $pelaksanaan->kegiatan->nama_kegiatan);
+                                                        $userKomselAsLeader = App\Models\Komsel::where('id_pemimpin', $user->id_anggota)
+                                                            ->where('nama_komsel', $komselName)
+                                                            ->exists();
+                                                        if ($userKomselAsLeader) {
+                                                            $canViewProfile = true;
+                                                        }
+                                                    }
+                                                @endphp
+                                                
+                                                @if($canViewProfile)
+                                                    <a href="{{ route('anggota.show', $kehadiran->anggota->id_anggota) }}">
+                                                        {{ $kehadiran->anggota->nama }}
+                                                    </a>
+                                                @else
                                                     {{ $kehadiran->anggota->nama }}
-                                                </a>
+                                                @endif
                                             </td>
                                             <td>{{ \Carbon\Carbon::parse($kehadiran->waktu_absensi)->format('d/m/Y H:i') }}</td>
                                             <td>
@@ -183,9 +236,15 @@
                     @endif
                 </div>
                 <div class="card-footer">
-                    <a href="{{ route('kehadiran.create', ['id_pelaksanaan' => $pelaksanaan->id_pelaksanaan]) }}" class="btn btn-primary">
-                        <i class="fas fa-clipboard-check"></i> Kelola Kehadiran
-                    </a>
+                    @if($canTakeAttendance || $isPast)
+                        <a href="{{ route('kehadiran.create', ['id_pelaksanaan' => $pelaksanaan->id_pelaksanaan]) }}" class="btn btn-primary">
+                            <i class="fas fa-clipboard-check"></i> Kelola Kehadiran
+                        </a>
+                    @else
+                        <button class="btn btn-secondary" disabled title="Presensi belum dapat dilakukan (kegiatan belum dimulai)">
+                            <i class="fas fa-clipboard-check"></i> Kelola Kehadiran
+                        </button>
+                    @endif
                 </div>
             </div>
         </div>
@@ -196,15 +255,17 @@
 @section('scripts')
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // Inisialisasi QR Code
-        new QRCode(document.getElementById("qrcode"), {
-            text: "{{ $qrUrl }}",
-            width: 200,
-            height: 200,
-            colorDark: "#000000",
-            colorLight: "#ffffff",
-            correctLevel: QRCode.CorrectLevel.H
-        });
+        // Inisialisasi QR Code jika diperlukan
+        if (document.getElementById("qrcode")) {
+            new QRCode(document.getElementById("qrcode"), {
+                text: "{{ $qrUrl }}",
+                width: 200,
+                height: 200,
+                colorDark: "#000000",
+                colorLight: "#ffffff",
+                correctLevel: QRCode.CorrectLevel.H
+            });
+        }
     });
 </script>
 @endsection

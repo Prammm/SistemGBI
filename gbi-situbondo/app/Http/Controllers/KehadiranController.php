@@ -29,12 +29,20 @@ class KehadiranController extends Controller
         $user = Auth::user();
         $kegiatan = Kegiatan::all();
         
-        // Get upcoming events based on user role
+        // Get upcoming events based on user role - Extended time range for better visibility
         if ($user->id_role == 1) { // Admin only (role 2 pengurus dihapus)
-            $pelaksanaan = PelaksanaanKegiatan::with('kegiatan')
-                ->where('tanggal_kegiatan', '>=', Carbon::now()->subDays(7)->format('Y-m-d'))
-                ->orderBy('tanggal_kegiatan')
-                ->limit(10)
+            $pelaksanaan = PelaksanaanKegiatan::with(['kegiatan', 'kehadiran'])
+                ->where('tanggal_kegiatan', '>=', Carbon::now()->subDays(30)->format('Y-m-d'))
+                ->where('tanggal_kegiatan', '<=', Carbon::now()->addDays(30)->format('Y-m-d'))
+                ->orderByRaw('
+                    CASE 
+                        WHEN DATE(tanggal_kegiatan) = CURDATE() THEN 0
+                        WHEN DATE(tanggal_kegiatan) > CURDATE() THEN 1 
+                        ELSE 2 
+                    END,
+                    DATE(tanggal_kegiatan) ASC,
+                    jam_mulai ASC
+                ')
                 ->get();
         } elseif ($user->id_role == 3) {
             // PETUGAS PELAYANAN (id_role = 3) - see only relevant events (no other komsel)
@@ -46,8 +54,9 @@ class KehadiranController extends Controller
                     return 'Komsel - ' . $name;
                 }, $komselNames);
                 
-                $pelaksanaan = PelaksanaanKegiatan::with('kegiatan')
-                    ->where('tanggal_kegiatan', '>=', Carbon::now()->subDays(7)->format('Y-m-d'))
+                $pelaksanaan = PelaksanaanKegiatan::with(['kegiatan', 'kehadiran'])
+                    ->where('tanggal_kegiatan', '>=', Carbon::now()->subDays(14)->format('Y-m-d'))
+                    ->where('tanggal_kegiatan', '<=', Carbon::now()->addDays(14)->format('Y-m-d'))
                     ->where(function($query) use ($komselActivityPatterns) {
                         // Include user's komsel activities
                         if (!empty($komselActivityPatterns)) {
@@ -62,18 +71,33 @@ class KehadiranController extends Controller
                             $subquery->where('tipe_kegiatan', '!=', 'komsel');
                         });
                     })
-                    ->orderBy('tanggal_kegiatan')
-                    ->limit(10)
+                    ->orderByRaw('
+                        CASE 
+                            WHEN DATE(tanggal_kegiatan) = CURDATE() THEN 0
+                            WHEN DATE(tanggal_kegiatan) > CURDATE() THEN 1 
+                            ELSE 2 
+                        END,
+                        DATE(tanggal_kegiatan) ASC,
+                        jam_mulai ASC
+                    ')
                     ->get();
             } else {
                 // Petugas without anggota profile - only general events
-                $pelaksanaan = PelaksanaanKegiatan::with('kegiatan')
+                $pelaksanaan = PelaksanaanKegiatan::with(['kegiatan', 'kehadiran'])
                     ->whereHas('kegiatan', function($query) {
                         $query->where('tipe_kegiatan', '!=', 'komsel');
                     })
-                    ->where('tanggal_kegiatan', '>=', Carbon::now()->subDays(7)->format('Y-m-d'))
-                    ->orderBy('tanggal_kegiatan')
-                    ->limit(10)
+                    ->where('tanggal_kegiatan', '>=', Carbon::now()->subDays(14)->format('Y-m-d'))
+                    ->where('tanggal_kegiatan', '<=', Carbon::now()->addDays(14)->format('Y-m-d'))
+                    ->orderByRaw('
+                        CASE 
+                            WHEN DATE(tanggal_kegiatan) = CURDATE() THEN 0
+                            WHEN DATE(tanggal_kegiatan) > CURDATE() THEN 1 
+                            ELSE 2 
+                        END,
+                        DATE(tanggal_kegiatan) ASC,
+                        jam_mulai ASC
+                    ')
                     ->get();
             }
         } else {
@@ -86,9 +110,9 @@ class KehadiranController extends Controller
                     return 'Komsel - ' . $name;
                 }, $komselNames);
                 
-                $pelaksanaan = PelaksanaanKegiatan::with('kegiatan')
-                    ->where('tanggal_kegiatan', '>=', Carbon::now()->subDays(1)->format('Y-m-d'))
-                    ->where('tanggal_kegiatan', '<=', Carbon::now()->addDays(7)->format('Y-m-d'))
+                $pelaksanaan = PelaksanaanKegiatan::with(['kegiatan', 'kehadiran'])
+                    ->where('tanggal_kegiatan', '>=', Carbon::now()->subDays(7)->format('Y-m-d'))
+                    ->where('tanggal_kegiatan', '<=', Carbon::now()->addDays(14)->format('Y-m-d'))
                     ->where(function($query) use ($komselActivityPatterns) {
                         // Include user's komsel activities
                         if (!empty($komselActivityPatterns)) {
@@ -103,19 +127,33 @@ class KehadiranController extends Controller
                             $subquery->where('tipe_kegiatan', '!=', 'komsel');
                         });
                     })
-                    ->orderBy('tanggal_kegiatan')
-                    ->limit(10)
+                    ->orderByRaw('
+                        CASE 
+                            WHEN DATE(tanggal_kegiatan) = CURDATE() THEN 0
+                            WHEN DATE(tanggal_kegiatan) > CURDATE() THEN 1 
+                            ELSE 2 
+                        END,
+                        DATE(tanggal_kegiatan) ASC,
+                        jam_mulai ASC
+                    ')
                     ->get();
             } else {
                 // User without anggota profile - only general events
-                $pelaksanaan = PelaksanaanKegiatan::with('kegiatan')
+                $pelaksanaan = PelaksanaanKegiatan::with(['kegiatan', 'kehadiran'])
                     ->whereHas('kegiatan', function($query) {
                         $query->where('tipe_kegiatan', '!=', 'komsel');
                     })
-                    ->where('tanggal_kegiatan', '>=', Carbon::now()->subDays(1)->format('Y-m-d'))
-                    ->where('tanggal_kegiatan', '<=', Carbon::now()->addDays(7)->format('Y-m-d'))
-                    ->orderBy('tanggal_kegiatan')
-                    ->limit(10)
+                    ->where('tanggal_kegiatan', '>=', Carbon::now()->subDays(7)->format('Y-m-d'))
+                    ->where('tanggal_kegiatan', '<=', Carbon::now()->addDays(14)->format('Y-m-d'))
+                    ->orderByRaw('
+                        CASE 
+                            WHEN DATE(tanggal_kegiatan) = CURDATE() THEN 0
+                            WHEN DATE(tanggal_kegiatan) > CURDATE() THEN 1 
+                            ELSE 2 
+                        END,
+                        DATE(tanggal_kegiatan) ASC,
+                        jam_mulai ASC
+                    ')
                     ->get();
             }
         }
