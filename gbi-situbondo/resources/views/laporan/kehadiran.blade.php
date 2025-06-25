@@ -27,6 +27,9 @@
     .stats-card.info {
         background-color: #36b9cc;
     }
+    .stats-card.danger {
+        background-color: #e74a3b;
+    }
     .stats-card-icon {
         font-size: 2rem;
         margin-bottom: 10px;
@@ -209,7 +212,7 @@
                                     @endforeach
                                 </select>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-2">
                                 <label for="kegiatan_id" class="form-label">Kegiatan</label>
                                 <select id="kegiatan_id" name="kegiatan_id" class="form-select">
                                     <option value="">-- Semua Kegiatan --</option>
@@ -221,7 +224,7 @@
                                     @endforeach
                                 </select>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-2">
                                 <label for="pelaksanaan_id" class="form-label">Pelaksanaan Spesifik</label>
                                 <select id="pelaksanaan_id" name="pelaksanaan_id" class="form-select">
                                     <option value="">-- Semua Pelaksanaan --</option>
@@ -232,6 +235,14 @@
                                             ({{ \Carbon\Carbon::parse($pelaksanaan->jam_mulai)->format('H:i') }})
                                         </option>
                                     @endforeach
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label for="status_filter" class="form-label">Status Kehadiran</label>
+                                <select id="status_filter" name="status_filter" class="form-select">
+                                    <option value="">-- Semua Status --</option>
+                                    <option value="hadir" {{ request('status_filter') == 'hadir' ? 'selected' : '' }}>Hadir</option>
+                                    <option value="tidak_hadir" {{ request('status_filter') == 'tidak_hadir' ? 'selected' : '' }}>Tidak Hadir</option>
                                 </select>
                             </div>
                         </div>
@@ -265,10 +276,19 @@
         <div class="col-xl-3 col-md-6">
             <div class="stats-card success">
                 <div class="stats-card-icon">
-                    <i class="fas fa-clipboard-check"></i>
+                    <i class="fas fa-user-check"></i>
                 </div>
-                <div class="stats-card-title">Total Kehadiran</div>
-                <div class="stats-card-value">{{ number_format($totalKehadiran) }}</div>
+                <div class="stats-card-title">Total Hadir</div>
+                <div class="stats-card-value">{{ number_format($totalHadir) }}</div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="stats-card danger">
+                <div class="stats-card-icon">
+                    <i class="fas fa-user-times"></i>
+                </div>
+                <div class="stats-card-title">Total Tidak Hadir</div>
+                <div class="stats-card-value">{{ number_format($totalTidakHadir) }}</div>
             </div>
         </div>
         <div class="col-xl-3 col-md-6">
@@ -278,18 +298,7 @@
                 </div>
                 <div class="stats-card-title">Rata-rata Kehadiran</div>
                 <div class="stats-card-value">
-                    {{ $totalAnggota > 0 ? round(($totalKehadiran / ($totalAnggota * 4)) * 100) : 0 }}%
-                </div>
-            </div>
-        </div>
-        <div class="col-xl-3 col-md-6">
-            <div class="stats-card info">
-                <div class="stats-card-icon">
-                    <i class="fas fa-calendar-week"></i>
-                </div>
-                <div class="stats-card-title">Kehadiran Minggu Ini</div>
-                <div class="stats-card-value">
-                    {{ isset($kehadiranPerMinggu[count($kehadiranPerMinggu)-1]) ? number_format($kehadiranPerMinggu[count($kehadiranPerMinggu)-1]['jumlah']) : 0 }}
+                    {{ $totalExpectedAttendance > 0 ? round(($totalHadir / $totalExpectedAttendance) * 100) : 0 }}%
                 </div>
             </div>
         </div>
@@ -313,12 +322,12 @@
         <div class="col-xl-6">
             <div class="card mb-4">
                 <div class="card-header">
-                    <i class="fas fa-chart-line me-1"></i>
-                    Kehadiran per Minggu
+                    <i class="fas fa-chart-pie me-1"></i>
+                    Status Kehadiran
                 </div>
                 <div class="card-body">
                     <div class="chart-container">
-                        <canvas id="mingguChart"></canvas>
+                        <canvas id="statusChart"></canvas>
                     </div>
                 </div>
             </div>
@@ -372,26 +381,32 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                @foreach($kehadiran as $k)
+                                @foreach($attendanceRecords as $record)
                                 <tr>
-                                    <td>{{ \Carbon\Carbon::parse($k->waktu_absensi)->format('d-m-Y') }}</td>
+                                    <td>{{ \Carbon\Carbon::parse($record['tanggal'])->format('d-m-Y') }}</td>
                                     <td>
-                                        <strong>{{ $k->anggota->nama ?? 'Tidak Diketahui' }}</strong>
-                                        @if($k->anggota && $k->anggota->keluarga)
-                                            <br><small class="text-muted">{{ $k->anggota->keluarga->nama_keluarga }}</small>
+                                        <strong>{{ $record['nama_anggota'] }}</strong>
+                                        @if($record['nama_keluarga'])
+                                            <br><small class="text-muted">{{ $record['nama_keluarga'] }}</small>
                                         @endif
                                     </td>
                                     <td>
-                                        <span class="fw-medium">{{ $k->pelaksanaan->kegiatan->nama_kegiatan ?? 'Tidak Diketahui' }}</span>
-                                        @if($k->pelaksanaan && $k->pelaksanaan->kegiatan)
+                                        <span class="fw-medium">{{ $record['nama_kegiatan'] }}</span>
+                                        @if($record['tipe_kegiatan'])
                                             <br><small class="text-muted badge bg-light text-dark">
-                                                {{ ucfirst($k->pelaksanaan->kegiatan->tipe_kegiatan) }}
+                                                {{ ucfirst($record['tipe_kegiatan']) }}
                                             </small>
                                         @endif
                                     </td>
-                                    <td>{{ \Carbon\Carbon::parse($k->waktu_absensi)->format('H:i') }}</td>
                                     <td>
-                                        @switch($k->status)
+                                        @if($record['waktu_absensi'])
+                                            {{ \Carbon\Carbon::parse($record['waktu_absensi'])->format('H:i') }}
+                                        @else
+                                            <small class="text-muted">-</small>
+                                        @endif
+                                    </td>
+                                    <td>
+                                        @switch($record['status'])
                                             @case('hadir')
                                                 <span class="badge bg-success">Hadir</span>
                                                 @break
@@ -404,12 +419,15 @@
                                             @case('alfa')
                                                 <span class="badge bg-danger">Alfa</span>
                                                 @break
+                                            @case('tidak_hadir')
+                                                <span class="badge bg-secondary">Tidak Hadir</span>
+                                                @break
                                             @default
-                                                <span class="badge bg-secondary">{{ ucfirst($k->status) }}</span>
+                                                <span class="badge bg-secondary">{{ ucfirst($record['status']) }}</span>
                                         @endswitch
                                     </td>
                                     <td>
-                                        <small>{{ $k->pelaksanaan->lokasi ?? '-' }}</small>
+                                        <small>{{ $record['lokasi'] ?? '-' }}</small>
                                     </td>
                                 </tr>
                                 @endforeach
@@ -428,7 +446,6 @@
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         // Initialize DataTable
-
         const periodSelect = document.getElementById('period');
         const customDateFields = document.getElementById('customDateFields');
         const customYearFields = document.getElementById('customYearFields');
@@ -505,34 +522,37 @@
             }
         });
         
-        // Kehadiran per Minggu Chart
-        const mingguCtx = document.getElementById('mingguChart').getContext('2d');
-        const mingguData = @json($kehadiranPerMinggu);
-        const mingguLabels = mingguData.map(item => item.minggu);
-        const mingguValues = mingguData.map(item => item.jumlah);
+        // Status Kehadiran Chart
+        const statusCtx = document.getElementById('statusChart').getContext('2d');
+        const statusData = @json($statusBreakdown);
         
-        new Chart(mingguCtx, {
-            type: 'line',
+        new Chart(statusCtx, {
+            type: 'doughnut',
             data: {
-                labels: mingguLabels,
+                labels: ['Hadir', 'Izin', 'Sakit', 'Alfa', 'Tidak Hadir'],
                 datasets: [{
-                    label: 'Jumlah Kehadiran',
-                    data: mingguValues,
-                    backgroundColor: 'rgba(28, 200, 138, 0.2)',
-                    borderColor: 'rgba(28, 200, 138, 1)',
-                    borderWidth: 2,
-                    tension: 0.3
+                    data: [
+                        statusData.hadir || 0,
+                        statusData.izin || 0,
+                        statusData.sakit || 0,
+                        statusData.alfa || 0,
+                        statusData.tidak_hadir || 0
+                    ],
+                    backgroundColor: [
+                        '#28a745',
+                        '#ffc107',
+                        '#17a2b8',
+                        '#dc3545',
+                        '#6c757d'
+                    ]
                 }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: {
-                            precision: 0
-                        }
+                plugins: {
+                    legend: {
+                        position: 'right'
                     }
                 }
             }

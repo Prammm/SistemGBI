@@ -27,6 +27,9 @@
     .stats-card.info {
         background-color: #36b9cc;
     }
+    .stats-card.danger {
+        background-color: #e74a3b;
+    }
     .stats-card-icon {
         font-size: 2rem;
         margin-bottom: 10px;
@@ -191,6 +194,7 @@
         <i class="fas fa-info-circle"></i>
         <strong>Catatan:</strong> Statistik pelayanan hanya menghitung jadwal dengan status "Diterima". 
         Namun, semua riwayat (termasuk yang ditolak atau menunggu konfirmasi) tetap ditampilkan dalam tabel.
+        Jadwal yang sudah lewat tanggal akan otomatis berubah status menjadi "Ditolak" jika belum dikonfirmasi.
     </div>
 
     <!-- Filter Section -->
@@ -230,7 +234,7 @@
                                     @endforeach
                                 </select>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-2">
                                 <label for="kegiatan_id" class="form-label">Kegiatan</label>
                                 <select id="kegiatan_id" name="kegiatan_id" class="form-select">
                                     <option value="">-- Semua Kegiatan --</option>
@@ -242,7 +246,7 @@
                                     @endforeach
                                 </select>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-2">
                                 <label for="pelaksanaan_id" class="form-label">Pelaksanaan Spesifik</label>
                                 <select id="pelaksanaan_id" name="pelaksanaan_id" class="form-select">
                                     <option value="">-- Semua Pelaksanaan --</option>
@@ -253,6 +257,15 @@
                                             ({{ \Carbon\Carbon::parse($pelaksanaan->jam_mulai)->format('H:i') }})
                                         </option>
                                     @endforeach
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label for="status_filter" class="form-label">Status Konfirmasi</label>
+                                <select id="status_filter" name="status_filter" class="form-select">
+                                    <option value="">-- Semua Status --</option>
+                                    <option value="terima" {{ request('status_filter') == 'terima' ? 'selected' : '' }}>Diterima</option>
+                                    <option value="tolak" {{ request('status_filter') == 'tolak' ? 'selected' : '' }}>Ditolak</option>
+                                    <option value="belum" {{ request('status_filter') == 'belum' ? 'selected' : '' }}>Menunggu Konfirmasi</option>
                                 </select>
                             </div>
                         </div>
@@ -287,33 +300,31 @@
         <div class="col-xl-3 col-md-6">
             <div class="stats-card success">
                 <div class="stats-card-icon">
-                    <i class="fas fa-hands-helping"></i>
+                    <i class="fas fa-check-circle"></i>
                 </div>
-                <div class="stats-card-title">Total Pelayan</div>
-                <div class="stats-card-value">{{ number_format($totalPelayan) }}</div>
-                <small style="opacity: 0.8;">Unik yang melayani</small>
+                <div class="stats-card-title">Diterima</div>
+                <div class="stats-card-value">{{ number_format($statusBreakdown['terima']) }}</div>
+                <small style="opacity: 0.8;">Jadwal dikonfirmasi</small>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="stats-card danger">
+                <div class="stats-card-icon">
+                    <i class="fas fa-times-circle"></i>
+                </div>
+                <div class="stats-card-title">Ditolak</div>
+                <div class="stats-card-value">{{ number_format($statusBreakdown['tolak']) }}</div>
+                <small style="opacity: 0.8;">Termasuk auto-reject</small>
             </div>
         </div>
         <div class="col-xl-3 col-md-6">
             <div class="stats-card warning">
                 <div class="stats-card-icon">
-                    <i class="fas fa-chart-bar"></i>
+                    <i class="fas fa-clock"></i>
                 </div>
-                <div class="stats-card-title">Total Riwayat</div>
-                <div class="stats-card-value">{{ number_format($jadwalPelayanan->count()) }}</div>
-                <small style="opacity: 0.8;">Semua status</small>
-            </div>
-        </div>
-        <div class="col-xl-3 col-md-6">
-            <div class="stats-card info">
-                <div class="stats-card-icon">
-                    <i class="fas fa-percentage"></i>
-                </div>
-                <div class="stats-card-title">Tingkat Penerimaan</div>
-                <div class="stats-card-value">
-                    {{ $jadwalPelayanan->count() > 0 ? round(($totalPelayanan / $jadwalPelayanan->count()) * 100) : 0 }}%
-                </div>
-                <small style="opacity: 0.8;">Diterima vs Total</small>
+                <div class="stats-card-title">Menunggu</div>
+                <div class="stats-card-value">{{ number_format($statusBreakdown['belum']) }}</div>
+                <small style="opacity: 0.8;">Belum konfirmasi</small>
             </div>
         </div>
     </div>
@@ -336,12 +347,12 @@
         <div class="col-xl-6">
             <div class="card mb-4">
                 <div class="card-header">
-                    <i class="fas fa-chart-bar me-1"></i>
-                    Pelayan Paling Aktif <small class="text-muted">(Hanya yang diterima)</small>
+                    <i class="fas fa-chart-doughnut me-1"></i>
+                    Status Konfirmasi
                 </div>
                 <div class="card-body">
                     <div class="chart-container">
-                        <canvas id="pelayanChart"></canvas>
+                        <canvas id="statusChart"></canvas>
                     </div>
                 </div>
             </div>
@@ -426,6 +437,9 @@
                                                 <span class="badge bg-danger">
                                                     <i class="fas fa-times me-1"></i>Ditolak
                                                 </span>
+                                                @if(\Carbon\Carbon::parse($jp->tanggal_pelayanan)->isPast())
+                                                    <br><small class="text-muted">Auto-reject</small>
+                                                @endif
                                                 @break
                                             @case('belum')
                                                 <span class="badge bg-warning text-dark">
@@ -462,8 +476,6 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-
-
         const periodSelect = document.getElementById('period');
         const customDateFields = document.getElementById('customDateFields');
         const customYearFields = document.getElementById('customYearFields');
@@ -482,6 +494,7 @@
                 }
             });
         }
+        
         // Initialize DataTable
         const pelayananTable = new simpleDatatables.DataTable("#pelayananTable", {
             searchable: true,
@@ -508,6 +521,11 @@
         const posisiData = @json($pelayananPerPosisi);
         const posisiLabels = posisiData.map(item => item.posisi);
         const posisiValues = posisiData.map(item => item.jumlah);
+        const posisiColors = [
+            'rgba(78, 115, 223, 0.8)',
+            'rgba(28, 200, 138, 0.8)',
+            'rgba(246, 194, 62, 0.8)',
+            'rgba(231, 74, 59, 0.8)',
         const posisiColors = [
             'rgba(78, 115, 223, 0.8)',
             'rgba(28, 200, 138, 0.8)',
@@ -547,39 +565,39 @@
             }
         });
         
-        // Pelayan Paling Aktif Chart
-        const pelayanCtx = document.getElementById('pelayanChart').getContext('2d');
-        const pelayanData = @json($pelayanAktif);
-        const pelayanLabels = pelayanData.map(item => item.anggota);
-        const pelayanValues = pelayanData.map(item => item.jumlah);
+        // Status Konfirmasi Chart
+        const statusCtx = document.getElementById('statusChart').getContext('2d');
+        const statusData = @json($statusBreakdown);
         
-        new Chart(pelayanCtx, {
-            type: 'bar',
+        new Chart(statusCtx, {
+            type: 'doughnut',
             data: {
-                labels: pelayanLabels,
+                labels: ['Diterima', 'Ditolak', 'Menunggu'],
                 datasets: [{
-                    label: 'Jumlah Pelayanan',
-                    data: pelayanValues,
-                    backgroundColor: 'rgba(28, 200, 138, 0.8)',
-                    borderColor: 'rgba(28, 200, 138, 1)',
-                    borderWidth: 1
+                    data: [
+                        statusData.terima || 0,
+                        statusData.tolak || 0,
+                        statusData.belum || 0
+                    ],
+                    backgroundColor: [
+                        '#28a745',
+                        '#dc3545',
+                        '#ffc107'
+                    ],
+                    borderColor: '#ffffff',
+                    borderWidth: 2
                 }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                indexAxis: 'y',
-                scales: {
-                    x: {
-                        beginAtZero: true,
-                        ticks: {
-                            precision: 0
-                        }
-                    }
-                },
                 plugins: {
                     legend: {
-                        display: false
+                        position: 'bottom',
+                        labels: {
+                            padding: 20,
+                            usePointStyle: true
+                        }
                     }
                 }
             }

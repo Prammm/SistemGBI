@@ -176,6 +176,10 @@
                             </thead>
                             <tbody>
                                 @foreach($historyData as $jadwal)
+                                    @php
+                                        $isExpired = \Carbon\Carbon::parse($jadwal->tanggal_pelayanan)->isPast() && $jadwal->status_konfirmasi === 'belum';
+                                        $wasAutoRejected = \Carbon\Carbon::parse($jadwal->tanggal_pelayanan)->isPast() && $jadwal->status_konfirmasi === 'tolak';
+                                    @endphp
                                     <tr class="{{ $jadwal->status_konfirmasi === 'terima' ? 'table-light' : ($jadwal->status_konfirmasi === 'tolak' ? 'table-danger' : 'table-warning') }}">
                                         <td>
                                             <strong>{{ \Carbon\Carbon::parse($jadwal->tanggal_pelayanan)->format('d/m/Y') }}</strong><br>
@@ -213,6 +217,9 @@
                                                     @break
                                                 @case('tolak')
                                                     <span class="badge bg-danger">Ditolak</span>
+                                                    @if($wasAutoRejected)
+                                                        <br><small class="text-muted">Auto-reject</small>
+                                                    @endif
                                                     @php
                                                         $replacement = \App\Models\JadwalPelayananReplacement::where('id_jadwal_pelayanan', $jadwal->id_pelayanan)->first();
                                                     @endphp
@@ -228,6 +235,9 @@
                                                     @break
                                                 @default
                                                     <span class="badge bg-warning">Belum Konfirmasi</span>
+                                                    @if($isExpired)
+                                                        <br><small class="text-danger">Akan auto-reject</small>
+                                                    @endif
                                             @endswitch
                                         </td>
                                         <td>
@@ -250,6 +260,12 @@
                                                 <button type="button" class="btn btn-outline-info" onclick="viewDetails({{ $jadwal->id_pelayanan }})" title="Detail">
                                                     <i class="fas fa-eye"></i>
                                                 </button>
+                                                @if(Auth::user()->id_role <= 2)
+                                                    <!-- Edit button for Admin only -->
+                                                    <button type="button" class="btn btn-outline-warning" onclick="editSchedule({{ $jadwal->id_pelayanan }})" title="Edit">
+                                                        <i class="fas fa-edit"></i>
+                                                    </button>
+                                                @endif
                                             </div>
                                         </td>
                                     </tr>
@@ -367,6 +383,35 @@
         </div>
     </div>
 </div>
+
+<!-- Edit Modal -->
+@if(Auth::user()->id_role <= 2)
+<div class="modal fade" id="editModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Edit Jadwal Pelayanan</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="editForm" method="POST">
+                @csrf
+                @method('PUT')
+                <div class="modal-body" id="editModalBody">
+                    <div class="text-center">
+                        <div class="spinner-border" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                    <button type="submit" class="btn btn-primary">Simpan Perubahan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+@endif
 @endsection
 
 @section('scripts')
@@ -464,6 +509,104 @@
         const modal = new bootstrap.Modal(document.getElementById('detailModal'));
         modal.show();
     }
+    
+    @if(Auth::user()->id_role <= 2)
+    function editSchedule(jadwalId) {
+        const modalBody = document.getElementById('editModalBody');
+        const editForm = document.getElementById('editForm');
+        
+        modalBody.innerHTML = `
+            <div class="text-center">
+                <div class="spinner-border" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        `;
+        
+        // Set form action
+        editForm.action = `/pelayanan/api/update-schedule/${jadwalId}`;
+        
+        fetch(`/pelayanan/api/schedule-details/${jadwalId}`)
+            .then(response => response.json())
+            .then(data => {
+                const schedule = data.schedule;
+                
+                let html = `
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="edit_status" class="form-label">Status Konfirmasi</label>
+                                <select class="form-select" id="edit_status" name="status_konfirmasi" required>
+                                    <option value="belum">Belum Konfirmasi</option>
+                                    <option value="terima">Diterima</option>
+                                    <option value="tolak">Ditolak</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="edit_notes" class="form-label">Catatan</label>
+                                <textarea class="form-control" id="edit_notes" name="notes" rows="3" placeholder="Catatan perubahan..."></textarea>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="alert alert-info">
+                        <h6>Informasi Jadwal:</h6>
+                        <strong>Kegiatan:</strong> ${schedule.kegiatan}<br>
+                        <strong>Tanggal:</strong> ${schedule.tanggal}<br>
+                        <strong>Petugas:</strong> ${schedule.anggota}<br>
+                        <strong>Posisi:</strong> ${schedule.posisi}
+                    </div>
+                `;
+                
+                modalBody.innerHTML = html;
+                
+                // Set current status as selected
+                const currentStatus = schedule.status_badge.includes('Diterima') ? 'terima' : 
+                                    schedule.status_badge.includes('Ditolak') ? 'tolak' : 'belum';
+                document.getElementById('edit_status').value = currentStatus;
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                modalBody.innerHTML = `
+                    <div class="alert alert-danger">
+                        Terjadi kesalahan saat memuat data.
+                    </div>
+                `;
+            });
+        
+        const modal = new bootstrap.Modal(document.getElementById('editModal'));
+        modal.show();
+    }
+    
+    // Handle edit form submission
+    document.getElementById('editForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const formData = new FormData(this);
+        const jadwalId = this.action.split('/').pop();
+        
+        fetch(`/pelayanan/api/update-schedule/${jadwalId}`, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload(); // Refresh page to show changes
+            } else {
+                alert('Terjadi kesalahan: ' + (data.message || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Terjadi kesalahan saat menyimpan perubahan.');
+        });
+    });
+    @endif
     
     function duplicateSchedule(jadwalId) {
         if (confirm('Duplikasi jadwal ini untuk pelaksanaan kegiatan lain?')) {

@@ -201,11 +201,12 @@ class LaporanController extends Controller
         }
 
         // Get filter parameters
-        $period = $request->input('period', 'custom'); // Tambahkan ini
+        $period = $request->input('period', 'custom');
         $bulan = $request->input('bulan', Carbon::now()->month);
         $tahun = $request->input('tahun', Carbon::now()->year);
         $kegiatan_id = $request->input('kegiatan_id');
         $pelaksanaan_id = $request->input('pelaksanaan_id');
+        $status_filter = $request->input('status_filter'); // New filter
         
         // Handle period-based filtering
         if (in_array($period, [1, 3, 6, 12])) {
@@ -231,13 +232,11 @@ class LaporanController extends Controller
         $pelaksanaanList = collect();
         if ($kegiatan_id) {
             if (in_array($period, [1, 3, 6, 12])) {
-                // For period-based filtering
                 $pelaksanaanList = PelaksanaanKegiatan::where('id_kegiatan', $kegiatan_id)
                     ->whereBetween('tanggal_kegiatan', [$startDate, $endDate])
                     ->orderBy('tanggal_kegiatan')
                     ->get();
             } else {
-                // For custom month/year filtering
                 $pelaksanaanList = PelaksanaanKegiatan::where('id_kegiatan', $kegiatan_id)
                     ->whereMonth('tanggal_kegiatan', $bulan)
                     ->whereYear('tanggal_kegiatan', $tahun)
@@ -246,99 +245,68 @@ class LaporanController extends Controller
             }
         }
         
-        // Query data kehadiran berdasarkan filter
+        // Get pelaksanaan kegiatan untuk periode yang dipilih
         if (in_array($period, [1, 3, 6, 12])) {
-            // Period-based filtering
-            $kehadiranQuery = Kehadiran::whereBetween('waktu_absensi', [$startDate, $endDate])
-                ->with(['anggota', 'pelaksanaan.kegiatan']);
+            $pelaksanaanQuery = PelaksanaanKegiatan::with('kegiatan')
+                ->whereBetween('tanggal_kegiatan', [$startDate, $endDate]);
         } else {
-            // Custom month/year filtering
-            $kehadiranQuery = Kehadiran::whereMonth('waktu_absensi', $bulan)
-                ->whereYear('waktu_absensi', $tahun)
-                ->with(['anggota', 'pelaksanaan.kegiatan']);
+            $pelaksanaanQuery = PelaksanaanKegiatan::with('kegiatan')
+                ->whereMonth('tanggal_kegiatan', $bulan)
+                ->whereYear('tanggal_kegiatan', $tahun);
         }
         
         if ($kegiatan_id) {
-            $kehadiranQuery->whereHas('pelaksanaan', function($query) use ($kegiatan_id) {
-                $query->where('id_kegiatan', $kegiatan_id);
-            });
+            $pelaksanaanQuery->where('id_kegiatan', $kegiatan_id);
         }
         
         if ($pelaksanaan_id) {
-            $kehadiranQuery->where('id_pelaksanaan', $pelaksanaan_id);
+            $pelaksanaanQuery->where('id_pelaksanaan', $pelaksanaan_id);
         }
         
-        $kehadiran = $kehadiranQuery->get();
+        $pelaksanaanEvents = $pelaksanaanQuery->get();
         
-        // Menghitung statistik kehadiran
+        // Generate comprehensive attendance records with auto-assignment logic
+        $attendanceRecords = $this->generateAttendanceRecords($pelaksanaanEvents, $status_filter);
+        
+        // Calculate statistics
         $totalAnggota = Anggota::count();
-        $totalKehadiran = $kehadiran->count();
+        $totalHadir = $attendanceRecords->where('status', 'hadir')->count();
+        $totalTidakHadir = $attendanceRecords->whereIn('status', ['izin', 'sakit', 'alfa', 'tidak_hadir'])->count();
+        $totalExpectedAttendance = $attendanceRecords->count();
+        
+        // Status breakdown for pie chart
+        $statusBreakdown = [
+            'hadir' => $attendanceRecords->where('status', 'hadir')->count(),
+            'izin' => $attendanceRecords->where('status', 'izin')->count(),
+            'sakit' => $attendanceRecords->where('status', 'sakit')->count(),
+            'alfa' => $attendanceRecords->where('status', 'alfa')->count(),
+            'tidak_hadir' => $attendanceRecords->where('status', 'tidak_hadir')->count(),
+        ];
         
         // Kehadiran per kegiatan
-        $kehadiranPerKegiatan = $kehadiran->groupBy(function($item) {
-            return $item->pelaksanaan->kegiatan->nama_kegiatan ?? 'Tidak Diketahui';
-        })
-        ->map(function ($items, $key) {
-            return [
-                'kegiatan' => $key,
-                'jumlah' => $items->count()
-            ];
-        })
-        ->sortByDesc('jumlah')
-        ->values();
-        
-        // Kehadiran per minggu
-        $kehadiranPerMinggu = [];
-        if (in_array($period, [1, 3, 6, 12])) {
-            // For period-based, calculate weekly data from the period
-            $currentDate = $startDate->copy();
-            $weekNumber = 1;
-            while ($currentDate <= $endDate && $weekNumber <= 12) {
-                $weekStart = $currentDate->copy()->startOfWeek();
-                $weekEnd = $currentDate->copy()->endOfWeek();
-                
-                $weeklyCount = Kehadiran::whereBetween('waktu_absensi', [$weekStart, $weekEnd])->count();
-                $kehadiranPerMinggu[] = [
-                    'minggu' => "Minggu $weekNumber",
-                    'jumlah' => $weeklyCount
+        $kehadiranPerKegiatan = $attendanceRecords->groupBy('nama_kegiatan')
+            ->map(function ($items, $key) {
+                return [
+                    'kegiatan' => $key,
+                    'jumlah' => $items->where('status', 'hadir')->count()
                 ];
-                
-                $currentDate->addWeek();
-                $weekNumber++;
-            }
-        } else {
-            // Original monthly week calculation
-            $startDate = Carbon::createFromDate($tahun, $bulan, 1);
-            $endDate = $startDate->copy()->endOfMonth();
-            
-            for ($week = 1; $week <= 5; $week++) {
-                $weekStart = ($week - 1) * 7 + 1;
-                $weekStartDate = Carbon::createFromDate($tahun, $bulan, $weekStart)->startOfDay();
-                $weekEndDate = $weekStartDate->copy()->addDays(6)->endOfDay();
-                
-                if ($weekStartDate->gt($endDate)) {
-                    break;
-                }
-                
-                $weeklyCount = Kehadiran::whereBetween('waktu_absensi', [$weekStartDate, $weekEndDate])->count();
-                $kehadiranPerMinggu[] = [
-                    'minggu' => "Minggu $week",
-                    'jumlah' => $weeklyCount
-                ];
-            }
-        }
+            })
+            ->sortByDesc('jumlah')
+            ->values();
         
         return view('laporan.kehadiran', compact(
-            'kehadiran', 
+            'attendanceRecords',
             'bulanList', 
             'tahunList', 
             'bulan', 
             'tahun', 
-            'period', // Tambahkan ini
+            'period',
             'totalAnggota', 
-            'totalKehadiran', 
+            'totalHadir',
+            'totalTidakHadir',
+            'totalExpectedAttendance',
+            'statusBreakdown',
             'kehadiranPerKegiatan',
-            'kehadiranPerMinggu',
             'kegiatanList',
             'pelaksanaanList',
             'kegiatan_id',
@@ -346,16 +314,109 @@ class LaporanController extends Controller
         ));
     }
 
+    /**
+     * Generate comprehensive attendance records with auto-assignment logic
+     */
+    private function generateAttendanceRecords($pelaksanaanEvents, $statusFilter = null)
+    {
+        $attendanceRecords = collect();
+        
+        foreach ($pelaksanaanEvents as $pelaksanaan) {
+            // Get actual attendance records
+            $actualAttendance = Kehadiran::where('id_pelaksanaan', $pelaksanaan->id_pelaksanaan)
+                ->with('anggota.keluarga')
+                ->get();
+            
+            // Determine who should attend this event
+            $expectedAttendees = $this->getExpectedAttendees($pelaksanaan);
+            
+            foreach ($expectedAttendees as $anggota) {
+                // Check if there's actual attendance record
+                $actualRecord = $actualAttendance->where('id_anggota', $anggota->id_anggota)->first();
+                
+                if ($actualRecord) {
+                    // Use actual attendance record
+                    $record = [
+                        'tanggal' => $pelaksanaan->tanggal_kegiatan,
+                        'nama_anggota' => $anggota->nama,
+                        'nama_keluarga' => $anggota->keluarga->nama_keluarga ?? null,
+                        'nama_kegiatan' => $pelaksanaan->kegiatan->nama_kegiatan,
+                        'tipe_kegiatan' => $pelaksanaan->kegiatan->tipe_kegiatan,
+                        'waktu_absensi' => $actualRecord->waktu_absensi,
+                        'status' => $actualRecord->status,
+                        'lokasi' => $pelaksanaan->lokasi
+                    ];
+                } else {
+                    // Auto-assign as "tidak_hadir" for past events
+                    $eventDate = Carbon::parse($pelaksanaan->tanggal_kegiatan);
+                    $status = $eventDate->isPast() ? 'tidak_hadir' : 'tidak_hadir';
+                    
+                    $record = [
+                        'tanggal' => $pelaksanaan->tanggal_kegiatan,
+                        'nama_anggota' => $anggota->nama,
+                        'nama_keluarga' => $anggota->keluarga->nama_keluarga ?? null,
+                        'nama_kegiatan' => $pelaksanaan->kegiatan->nama_kegiatan,
+                        'tipe_kegiatan' => $pelaksanaan->kegiatan->tipe_kegiatan,
+                        'waktu_absensi' => null,
+                        'status' => $status,
+                        'lokasi' => $pelaksanaan->lokasi
+                    ];
+                }
+                
+                // Apply status filter
+                if ($statusFilter) {
+                    if ($statusFilter === 'hadir' && $record['status'] !== 'hadir') {
+                        continue;
+                    }
+                    if ($statusFilter === 'tidak_hadir' && $record['status'] === 'hadir') {
+                        continue;
+                    }
+                }
+                
+                $attendanceRecords->push($record);
+            }
+        }
+        
+        return $attendanceRecords;
+    }
+
+    /**
+     * Determine who should attend a specific event
+     */
+    private function getExpectedAttendees($pelaksanaan)
+    {
+        $tipeKegiatan = $pelaksanaan->kegiatan->tipe_kegiatan;
+        
+        if ($tipeKegiatan === 'komsel') {
+            // For komsel, only komsel members are expected
+            $namaKomsel = str_replace('Komsel - ', '', $pelaksanaan->kegiatan->nama_kegiatan);
+            $komsel = Komsel::where('nama_komsel', $namaKomsel)->first();
+            
+            if ($komsel) {
+                return $komsel->anggota()->with('keluarga')->get();
+            } else {
+                return collect();
+            }
+        } else {
+            // For other events (ibadah, etc.), all active members are expected
+            return Anggota::with('keluarga')->get();
+        }
+    }
+
     public function pelayanan(Request $request)
     {
         $user = Auth::user();
         
+        // Auto-reject expired schedules when viewing pelayanan reports
+        $this->autoRejectExpiredSchedules();
+        
         // Get filter parameters
-        $period = $request->input('period', 'custom'); // Tambahkan ini
+        $period = $request->input('period', 'custom');
         $bulan = $request->input('bulan', Carbon::now()->month);
         $tahun = $request->input('tahun', Carbon::now()->year);
         $kegiatan_id = $request->input('kegiatan_id');
         $pelaksanaan_id = $request->input('pelaksanaan_id');
+        $status_filter = $request->input('status_filter'); // New filter
         
         // Handle period-based filtering
         if (in_array($period, [1, 3, 6, 12])) {
@@ -381,13 +442,11 @@ class LaporanController extends Controller
         $pelaksanaanList = collect();
         if ($kegiatan_id) {
             if (in_array($period, [1, 3, 6, 12])) {
-                // For period-based filtering
                 $pelaksanaanList = PelaksanaanKegiatan::where('id_kegiatan', $kegiatan_id)
                     ->whereBetween('tanggal_kegiatan', [$startDate, $endDate])
                     ->orderBy('tanggal_kegiatan')
                     ->get();
             } else {
-                // For custom month/year filtering
                 $pelaksanaanList = PelaksanaanKegiatan::where('id_kegiatan', $kegiatan_id)
                     ->whereMonth('tanggal_kegiatan', $bulan)
                     ->whereYear('tanggal_kegiatan', $tahun)
@@ -398,11 +457,9 @@ class LaporanController extends Controller
         
         // Query data pelayanan berdasarkan role dan filter
         if (in_array($period, [1, 3, 6, 12])) {
-            // Period-based filtering
             $query = JadwalPelayanan::whereBetween('tanggal_pelayanan', [$startDate, $endDate])
                 ->with(['anggota', 'kegiatan', 'pelaksanaan']);
         } else {
-            // Custom month/year filtering
             $query = JadwalPelayanan::whereMonth('tanggal_pelayanan', $bulan)
                 ->whereYear('tanggal_pelayanan', $tahun)
                 ->with(['anggota', 'kegiatan', 'pelaksanaan']);
@@ -416,19 +473,27 @@ class LaporanController extends Controller
             $query->where('id_pelaksanaan', $pelaksanaan_id);
         }
         
+        // Apply status filter
+        if ($status_filter) {
+            if ($status_filter === 'terima') {
+                $query->where('status_konfirmasi', 'terima');
+            } elseif ($status_filter === 'tolak') {
+                $query->where('status_konfirmasi', 'tolak');
+            } elseif ($status_filter === 'belum') {
+                $query->where('status_konfirmasi', 'belum');
+            }
+        }
+        
         // Filter based on user role
         if ($user->id_role == 3) {
-            // Petugas Pelayanan - show their own services and services they supervise
             $jadwalPelayanan = $query->get();
         } elseif ($user->id_role == 4) {
-            // Anggota Jemaat - only their own services
             if (!$user->id_anggota) {
                 return redirect()->route('laporan.index')
                     ->with('error', 'Profil anggota tidak lengkap.');
             }
             $jadwalPelayanan = $query->where('id_anggota', $user->id_anggota)->get();
         } else {
-            // Admin and Pengurus - all services
             $jadwalPelayanan = $query->get();
         }
         
@@ -436,6 +501,13 @@ class LaporanController extends Controller
         $jadwalPelayananTerima = $jadwalPelayanan->where('status_konfirmasi', 'terima');
         $totalPelayanan = $jadwalPelayananTerima->count();
         $totalPelayan = $jadwalPelayananTerima->groupBy('id_anggota')->count();
+        
+        // Status breakdown
+        $statusBreakdown = [
+            'terima' => $jadwalPelayanan->where('status_konfirmasi', 'terima')->count(),
+            'tolak' => $jadwalPelayanan->where('status_konfirmasi', 'tolak')->count(),
+            'belum' => $jadwalPelayanan->where('status_konfirmasi', 'belum')->count(),
+        ];
         
         // Pelayanan per posisi - hanya yang diterima
         $pelayananPerPosisi = $jadwalPelayananTerima->groupBy('posisi')
@@ -466,9 +538,10 @@ class LaporanController extends Controller
             'tahunList', 
             'bulan', 
             'tahun', 
-            'period', // Tambahkan ini
+            'period',
             'totalPelayanan', 
-            'totalPelayan', 
+            'totalPelayan',
+            'statusBreakdown',
             'pelayananPerPosisi',
             'pelayanAktif',
             'kegiatanList',
@@ -478,6 +551,19 @@ class LaporanController extends Controller
         ));
     }
 
+    /**
+     * Auto-reject expired schedules
+     */
+    private function autoRejectExpiredSchedules()
+    {
+        $expiredSchedules = JadwalPelayanan::where('status_konfirmasi', 'belum')
+            ->where('tanggal_pelayanan', '<', Carbon::now()->format('Y-m-d'))
+            ->get();
+        
+        foreach ($expiredSchedules as $jadwal) {
+            $jadwal->update(['status_konfirmasi' => 'tolak']);
+        }
+    }
 
     public function komsel(Request $request)
     {
@@ -685,6 +771,7 @@ class LaporanController extends Controller
         $period = $request->input('period', 6);
         $kegiatan_id = $request->input('kegiatan_id');
         $pelaksanaan_id = $request->input('pelaksanaan_id');
+        $status_filter = $request->input('status_filter'); // New filter
         
         $startDate = Carbon::now()->subMonths($period);
         $endDate = Carbon::now();
@@ -701,32 +788,30 @@ class LaporanController extends Controller
                 ->get();
         }
         
-        // Query kehadiran with filters
-        $kehadiranQuery = Kehadiran::where('id_anggota', $anggota->id_anggota)
-            ->whereBetween('waktu_absensi', [$startDate, $endDate])
-            ->with(['pelaksanaan.kegiatan']);
+        // Get pelaksanaan events for this period
+        $pelaksanaanEvents = PelaksanaanKegiatan::with('kegiatan')
+            ->whereBetween('tanggal_kegiatan', [$startDate, $endDate]);
         
         if ($kegiatan_id) {
-            $kehadiranQuery->whereHas('pelaksanaan', function($query) use ($kegiatan_id) {
-                $query->where('id_kegiatan', $kegiatan_id);
-            });
+            $pelaksanaanEvents->where('id_kegiatan', $kegiatan_id);
         }
         
         if ($pelaksanaan_id) {
-            $kehadiranQuery->where('id_pelaksanaan', $pelaksanaan_id);
+            $pelaksanaanEvents->where('id_pelaksanaan', $pelaksanaan_id);
         }
         
-        $kehadiran = $kehadiranQuery->orderBy('waktu_absensi', 'desc')->get();
+        $events = $pelaksanaanEvents->get();
+        
+        // Generate personal attendance records
+        $kehadiran = $this->generatePersonalAttendanceRecords($anggota, $events, $status_filter);
         
         // Calculate statistics
-        $totalKehadiran = $kehadiran->count();
+        $totalKehadiran = $kehadiran->where('status', 'hadir')->count();
         $kehadiranPerBulan = $kehadiran->groupBy(function($item) {
-            return Carbon::parse($item->waktu_absensi)->format('Y-m');
+            return Carbon::parse($item['tanggal'])->format('Y-m');
         })->map->count();
         
-        $kehadiranPerKegiatan = $kehadiran->groupBy(function($item) {
-            return $item->pelaksanaan->kegiatan->nama_kegiatan ?? 'Tidak Diketahui';
-        })->map->count()->sortDesc();
+        $kehadiranPerKegiatan = $kehadiran->groupBy('nama_kegiatan')->map->count()->sortDesc();
         
         // Get all users for selection (if user has permission)
         $allUsers = $canSelectUser ? User::whereNotNull('id_anggota')->with('anggota')->get() : collect();
@@ -748,6 +833,86 @@ class LaporanController extends Controller
             'kegiatan_id',
             'pelaksanaan_id'
         ));
+    }
+
+    /**
+     * Generate personal attendance records for a specific member
+     */
+    private function generatePersonalAttendanceRecords($anggota, $events, $statusFilter = null)
+    {
+        $attendanceRecords = collect();
+        
+        foreach ($events as $pelaksanaan) {
+            // Check if this member should attend this event
+            $shouldAttend = $this->shouldMemberAttend($anggota, $pelaksanaan);
+            
+            if (!$shouldAttend) {
+                continue; // Skip if member shouldn't attend this event
+            }
+            
+            // Check for actual attendance record
+            $actualRecord = Kehadiran::where('id_pelaksanaan', $pelaksanaan->id_pelaksanaan)
+                ->where('id_anggota', $anggota->id_anggota)
+                ->first();
+            
+            if ($actualRecord) {
+                // Use actual attendance record
+                $record = [
+                    'tanggal' => $pelaksanaan->tanggal_kegiatan,
+                    'nama_kegiatan' => $pelaksanaan->kegiatan->nama_kegiatan,
+                    'tipe_kegiatan' => $pelaksanaan->kegiatan->tipe_kegiatan,
+                    'waktu_absensi' => $actualRecord->waktu_absensi,
+                    'status' => $actualRecord->status,
+                    'lokasi' => $pelaksanaan->lokasi,
+                    'keterangan' => $actualRecord->keterangan
+                ];
+            } else {
+                // Auto-assign as "tidak_hadir" for past events
+                $eventDate = Carbon::parse($pelaksanaan->tanggal_kegiatan);
+                $status = $eventDate->isPast() ? 'tidak_hadir' : 'tidak_hadir';
+                
+                $record = [
+                    'tanggal' => $pelaksanaan->tanggal_kegiatan,
+                    'nama_kegiatan' => $pelaksanaan->kegiatan->nama_kegiatan,
+                    'tipe_kegiatan' => $pelaksanaan->kegiatan->tipe_kegiatan,
+                    'waktu_absensi' => null,
+                    'status' => $status,
+                    'lokasi' => $pelaksanaan->lokasi,
+                    'keterangan' => 'Auto-generated: Tidak hadir'
+                ];
+            }
+            
+            // Apply status filter
+            if ($statusFilter) {
+                if ($statusFilter === 'hadir' && $record['status'] !== 'hadir') {
+                    continue;
+                }
+                if ($statusFilter === 'tidak_hadir' && $record['status'] === 'hadir') {
+                    continue;
+                }
+            }
+            
+            $attendanceRecords->push($record);
+        }
+        
+        return $attendanceRecords->sortByDesc('tanggal');
+    }
+
+    /**
+     * Check if a member should attend a specific event
+     */
+    private function shouldMemberAttend($anggota, $pelaksanaan)
+    {
+        $tipeKegiatan = $pelaksanaan->kegiatan->tipe_kegiatan;
+        
+        if ($tipeKegiatan === 'komsel') {
+            // For komsel, check if member belongs to this komsel
+            $namaKomsel = str_replace('Komsel - ', '', $pelaksanaan->kegiatan->nama_kegiatan);
+            return $anggota->komsel->contains('nama_komsel', $namaKomsel);
+        } else {
+            // For other events (ibadah, etc.), all members should attend
+            return true;
+        }
     }
 
     /**
@@ -887,6 +1052,9 @@ class LaporanController extends Controller
     {
         $user = Auth::user();
         
+        // Auto-reject expired schedules when viewing personal service reports
+        $this->autoRejectExpiredSchedules();
+        
         // Check if user can select other users (Admin, Pengurus, Petugas Pelayanan)
         $canSelectUser = $user->id_role <= 3;
         $selectedUserId = null;
@@ -914,6 +1082,7 @@ class LaporanController extends Controller
         $period = $request->input('period', 6);
         $kegiatan_id = $request->input('kegiatan_id');
         $pelaksanaan_id = $request->input('pelaksanaan_id');
+        $status_filter = $request->input('status_filter'); // New filter
         
         $startDate = Carbon::now()->subMonths($period);
         $endDate = Carbon::now();
@@ -941,6 +1110,17 @@ class LaporanController extends Controller
         
         if ($pelaksanaan_id) {
             $jadwalPelayananQuery->where('id_pelaksanaan', $pelaksanaan_id);
+        }
+        
+        // Apply status filter
+        if ($status_filter) {
+            if ($status_filter === 'terima') {
+                $jadwalPelayananQuery->where('status_konfirmasi', 'terima');
+            } elseif ($status_filter === 'tolak') {
+                $jadwalPelayananQuery->where('status_konfirmasi', 'tolak');
+            } elseif ($status_filter === 'belum') {
+                $jadwalPelayananQuery->where('status_konfirmasi', 'belum');
+            }
         }
         
         $jadwalPelayanan = $jadwalPelayananQuery->orderBy('tanggal_pelayanan', 'desc')->get();

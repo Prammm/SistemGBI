@@ -519,7 +519,12 @@ class PelayananController extends Controller
             $jadwal->update(['status_konfirmasi' => 'tolak']);
             
             // Log the auto-rejection
-            Log::info("Auto-rejected expired schedule: {$jadwal->id_pelayanan}");
+            Log::info("Auto-rejected expired schedule", [
+                'id_pelayanan' => $jadwal->id_pelayanan,
+                'anggota' => $jadwal->anggota->nama ?? 'Unknown',
+                'tanggal_pelayanan' => $jadwal->tanggal_pelayanan,
+                'posisi' => $jadwal->posisi
+            ]);
             
             $rejectedCount++;
         }
@@ -2147,4 +2152,61 @@ class PelayananController extends Controller
             'data' => $data
         ];
     }
+
+    public function updateSchedule(Request $request, $id)
+    {
+        if (Auth::user()->id_role > 2) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Tidak memiliki akses'
+            ], 403);
+        }
+        
+        $validator = Validator::make($request->all(), [
+            'status_konfirmasi' => 'required|in:belum,terima,tolak',
+            'notes' => 'nullable|string|max:500'
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'errors' => $validator->errors()
+            ], 422);
+        }
+        
+        try {
+            $jadwal = JadwalPelayanan::findOrFail($id);
+            $oldStatus = $jadwal->status_konfirmasi;
+            
+            $jadwal->update([
+                'status_konfirmasi' => $request->status_konfirmasi
+            ]);
+            
+            // Log the manual update
+            Log::info("Schedule manually updated by admin", [
+                'id_pelayanan' => $jadwal->id_pelayanan,
+                'old_status' => $oldStatus,
+                'new_status' => $request->status_konfirmasi,
+                'updated_by' => Auth::id(),
+                'notes' => $request->notes
+            ]);
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Status jadwal berhasil diperbarui'
+            ]);
+            
+        } catch (\Exception $e) {
+            Log::error('Error updating schedule: ' . $e->getMessage());
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Terjadi kesalahan saat memperbarui jadwal'
+            ], 500);
+        }
+    }
+
+
+
+
 }

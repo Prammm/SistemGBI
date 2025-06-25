@@ -496,6 +496,8 @@ Route::middleware(['auth'])->prefix('pelayanan/api')->name('pelayanan.api.')->gr
     Route::middleware(['permission:manage_system'])->group(function () {
         Route::post('/auto-reject-expired', [App\Http\Controllers\PelayananController::class, 'autoRejectExpiredSchedules'])
             ->name('auto-reject-expired');
+        Route::post('/update-schedule/{id}', [PelayananController::class, 'updateSchedule'])
+            ->name('api.update-schedule');
     });
 });
 
