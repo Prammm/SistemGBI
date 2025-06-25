@@ -322,12 +322,12 @@
         <div class="col-xl-6">
             <div class="card mb-4">
                 <div class="card-header">
-                    <i class="fas fa-chart-pie me-1"></i>
-                    Status Kehadiran
+                    <i class="fas fa-chart-line me-1"></i>
+                    Kehadiran per Minggu
                 </div>
                 <div class="card-body">
                     <div class="chart-container">
-                        <canvas id="statusChart"></canvas>
+                        <canvas id="mingguanChart"></canvas>
                     </div>
                 </div>
             </div>
@@ -444,8 +444,61 @@
 @section('scripts')
 <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
 <script>
+
+    
     document.addEventListener('DOMContentLoaded', function() {
         // Initialize DataTable
+
+
+        const mingguanCtx = document.getElementById('mingguanChart').getContext('2d');
+        const mingguanData = @json($kehadiranPerMinggu);
+        const mingguanLabels = mingguanData.map(item => item.minggu);
+        const mingguanValues = mingguanData.map(item => item.jumlah);
+
+        new Chart(mingguanCtx, {
+            type: 'line',
+            data: {
+                labels: mingguanLabels,
+                datasets: [{
+                    label: 'Jumlah Kehadiran',
+                    data: mingguanValues,
+                    backgroundColor: 'rgba(28, 200, 138, 0.1)',
+                    borderColor: 'rgba(28, 200, 138, 1)',
+                    borderWidth: 3,
+                    fill: true,
+                    tension: 0.4,
+                    pointBackgroundColor: 'rgba(28, 200, 138, 1)',
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 2,
+                    pointRadius: 6
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            precision: 0
+                        },
+                        grid: {
+                            color: 'rgba(0,0,0,0.05)'
+                        }
+                    },
+                    x: {
+                        grid: {
+                            display: false
+                        }
+                    }
+                }
+            }
+        });
         const periodSelect = document.getElementById('period');
         const customDateFields = document.getElementById('customDateFields');
         const customYearFields = document.getElementById('customYearFields');
@@ -529,20 +582,16 @@
         new Chart(statusCtx, {
             type: 'doughnut',
             data: {
-                labels: ['Hadir', 'Izin', 'Sakit', 'Alfa', 'Tidak Hadir'],
+                labels: ['Hadir',  'Tidak Hadir'],
                 datasets: [{
                     data: [
                         statusData.hadir || 0,
-                        statusData.izin || 0,
-                        statusData.sakit || 0,
-                        statusData.alfa || 0,
+
                         statusData.tidak_hadir || 0
                     ],
                     backgroundColor: [
                         '#28a745',
-                        '#ffc107',
-                        '#17a2b8',
-                        '#dc3545',
+    
                         '#6c757d'
                     ]
                 }]

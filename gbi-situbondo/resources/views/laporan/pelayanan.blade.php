@@ -194,7 +194,7 @@
         <i class="fas fa-info-circle"></i>
         <strong>Catatan:</strong> Statistik pelayanan hanya menghitung jadwal dengan status "Diterima". 
         Namun, semua riwayat (termasuk yang ditolak atau menunggu konfirmasi) tetap ditampilkan dalam tabel.
-        Jadwal yang sudah lewat tanggal akan otomatis berubah status menjadi "Ditolak" jika belum dikonfirmasi.
+        <strong>Jadwal yang sudah lewat tanggal akan otomatis berubah status menjadi "Ditolak" jika belum dikonfirmasi.</strong>
     </div>
 
     <!-- Filter Section -->
@@ -407,6 +407,10 @@
                             </thead>
                             <tbody>
                                 @foreach($jadwalPelayanan as $jp)
+                                @php
+                                    $isExpired = \Carbon\Carbon::parse($jp->tanggal_pelayanan)->isPast() && $jp->status_konfirmasi === 'belum';
+                                    $wasAutoRejected = \Carbon\Carbon::parse($jp->tanggal_pelayanan)->isPast() && $jp->status_konfirmasi === 'tolak';
+                                @endphp
                                 <tr>
                                     <td>{{ \Carbon\Carbon::parse($jp->tanggal_pelayanan)->format('d-m-Y') }}</td>
                                     <td>

@@ -217,6 +217,20 @@
         margin-bottom: 5px;
     }
     
+    .info-note {
+        background: #e8f5e8;
+        border: 1px solid #c3e6c3;
+        border-radius: 8px;
+        padding: 12px 15px;
+        margin-bottom: 20px;
+        color: #2d5a2d;
+        font-size: 0.9rem;
+    }
+    
+    .info-note .fas {
+        margin-right: 8px;
+    }
+    
     /* Custom DataTable Styling */
     .dataTables_wrapper {
         padding: 0;
@@ -351,6 +365,14 @@
         <li class="breadcrumb-item"><a href="{{ route('laporan.index') }}">Laporan</a></li>
         <li class="breadcrumb-item active">Riwayat Pelayanan</li>
     </ol>
+
+    <!-- Info Note -->
+    <div class="info-note">
+        <i class="fas fa-info-circle"></i>
+        <strong>Catatan:</strong> Statistik pelayanan hanya menghitung jadwal dengan status "Diterima". 
+        Namun, semua riwayat (termasuk yang ditolak atau menunggu konfirmasi) tetap ditampilkan dalam tabel.
+        Jadwal yang sudah lewat tanggal akan otomatis berubah status menjadi "Ditolak" jika belum dikonfirmasi.
+    </div>
     
     <div class="report-header">
         {{-- User Selection for Admin/Pengurus/Petugas Pelayanan --}}
@@ -451,6 +473,15 @@
                         </select>
                     </div>
                     <div>
+                        <label for="status_filter" class="form-label">Status Konfirmasi</label>
+                        <select id="status_filter" name="status_filter" class="form-select">
+                            <option value="">-- Semua Status --</option>
+                            <option value="terima" {{ request('status_filter') == 'terima' ? 'selected' : '' }}>Diterima</option>
+                            <option value="tolak" {{ request('status_filter') == 'tolak' ? 'selected' : '' }}>Ditolak</option>
+                            <option value="belum" {{ request('status_filter') == 'belum' ? 'selected' : '' }}>Menunggu Konfirmasi</option>
+                        </select>
+                    </div>
+                    <div>
                         <button type="submit" class="btn btn-success">
                             <i class="fas fa-search me-2"></i>Terapkan Filter
                         </button>
@@ -472,6 +503,7 @@
                             Filter: {{ $kegiatanList->where('id_kegiatan', $kegiatan_id)->first()->nama_kegiatan ?? 'Kegiatan Tidak Ditemukan' }}
                         </small>
                     @endif
+                    <br><small style="opacity: 0.8;">Hanya yang diterima</small>
                 </div>
             </div>
         </div>
@@ -483,6 +515,7 @@
                 </div>
                 <div class="stats-description">
                     Pelayanan bulanan {{ $canSelectUser && $selectedUserId ? $anggota->nama : 'Anda' }}
+                    <br><small style="opacity: 0.8;">Yang diterima</small>
                 </div>
             </div>
         </div>
@@ -492,6 +525,7 @@
                 <div class="stats-number">{{ $pelayananPerPosisi->count() > 0 ? Str::limit($pelayananPerPosisi->keys()->first(), 15) : '-' }}</div>
                 <div class="stats-description">
                     {{ $pelayananPerPosisi->count() > 0 ? $pelayananPerPosisi->first() . ' kali melayani' : 'Belum ada data' }}
+                    <br><small style="opacity: 0.8;">Yang diterima</small>
                 </div>
             </div>
         </div>
@@ -546,22 +580,32 @@
                 @if(!$canSelectUser || !$selectedUserId)
                     <div class="export-buttons p-3">
                         <a href="{{ route('laporan.export', ['jenis' => 'personal-service-report', 'format' => 'pdf']) }}{{ request()->getQueryString() ? '?' . request()->getQueryString() : '' }}" 
-                           class="btn btn-danger btn-sm">
+                        class="btn btn-danger btn-sm">
                             <i class="fas fa-file-pdf me-1"></i>Export PDF
                         </a>
                         <a href="{{ route('laporan.export', ['jenis' => 'personal-service-report', 'format' => 'excel']) }}{{ request()->getQueryString() ? '?' . request()->getQueryString() : '' }}" 
-                           class="btn btn-success btn-sm">
+                        class="btn btn-success btn-sm">
                             <i class="fas fa-file-excel me-1"></i>Export Excel
                         </a>
                     </div>
                 @else
-                    <div class="export-buttons">
-                        <a href="{{ route('laporan.export', ['jenis' => 'personal-service-report', 'format' => 'pdf']) }}?user_id={{ $selectedUserId }}&period={{ $period }}{{ $kegiatan_id ? '&kegiatan_id=' . $kegiatan_id : '' }}{{ $pelaksanaan_id ? '&pelaksanaan_id=' . $pelaksanaan_id : '' }}" 
-                           class="btn btn-danger btn-sm">
+                    <div class="export-buttons p-3">
+                        @php
+                            $exportParams = [
+                                'user_id' => $selectedUserId,
+                                'period' => $period
+                            ];
+                            if($kegiatan_id) $exportParams['kegiatan_id'] = $kegiatan_id;
+                            if($pelaksanaan_id) $exportParams['pelaksanaan_id'] = $pelaksanaan_id;
+                            if(request('status_filter')) $exportParams['status_filter'] = request('status_filter');
+                            $exportQuery = http_build_query($exportParams);
+                        @endphp
+                        <a href="{{ route('laporan.export', ['jenis' => 'personal-service-report', 'format' => 'pdf']) }}?{{ $exportQuery }}" 
+                        class="btn btn-danger btn-sm">
                             <i class="fas fa-file-pdf me-1"></i>Export PDF
                         </a>
-                        <a href="{{ route('laporan.export', ['jenis' => 'personal-service-report', 'format' => 'excel']) }}?user_id={{ $selectedUserId }}&period={{ $period }}{{ $kegiatan_id ? '&kegiatan_id=' . $kegiatan_id : '' }}{{ $pelaksanaan_id ? '&pelaksanaan_id=' . $pelaksanaan_id : '' }}" 
-                           class="btn btn-success btn-sm">
+                        <a href="{{ route('laporan.export', ['jenis' => 'personal-service-report', 'format' => 'excel']) }}?{{ $exportQuery }}" 
+                        class="btn btn-success btn-sm">
                             <i class="fas fa-file-excel me-1"></i>Export Excel
                         </a>
                     </div>
@@ -582,6 +626,10 @@
                         </thead>
                         <tbody>
                             @foreach($jadwalPelayanan as $pelayanan)
+                                @php
+                                    $isExpired = \Carbon\Carbon::parse($pelayanan->tanggal_pelayanan)->isPast() && $pelayanan->status_konfirmasi === 'belum';
+                                    $wasAutoRejected = \Carbon\Carbon::parse($pelayanan->tanggal_pelayanan)->isPast() && $pelayanan->status_konfirmasi === 'tolak';
+                                @endphp
                                 <tr>
                                     <td>{{ \Carbon\Carbon::parse($pelayanan->tanggal_pelayanan)->format('d-m-Y') }}</td>
                                     <td>
@@ -606,11 +654,17 @@
                                                 <span class="badge bg-danger">
                                                     <i class="fas fa-times me-1"></i>Ditolak
                                                 </span>
+                                                @if($wasAutoRejected)
+                                                    <br><small class="text-muted">Auto-reject</small>
+                                                @endif
                                                 @break
                                             @case('belum')
                                                 <span class="badge bg-warning text-dark">
                                                     <i class="fas fa-clock me-1"></i>Menunggu
                                                 </span>
+                                                @if($isExpired)
+                                                    <br><small class="text-danger">Akan auto-reject</small>
+                                                @endif
                                                 @break
                                             @default
                                                 <span class="badge bg-secondary">{{ ucfirst($pelayanan->status_konfirmasi) }}</span>

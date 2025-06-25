@@ -395,13 +395,9 @@
             </div>
             <form id="editForm" method="POST">
                 @csrf
-                @method('PUT')
+                <input type="hidden" name="_method" value="PUT" id="editMethodField">
                 <div class="modal-body" id="editModalBody">
-                    <div class="text-center">
-                        <div class="spinner-border" role="status">
-                            <span class="visually-hidden">Loading...</span>
-                        </div>
-                    </div>
+                    <!-- content akan diload via AJAX -->
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
@@ -523,7 +519,7 @@
             </div>
         `;
         
-        // Set form action
+        // PERBAIKAN: Set form action yang benar
         editForm.action = `/pelayanan/api/update-schedule/${jadwalId}`;
         
         fetch(`/pelayanan/api/schedule-details/${jadwalId}`)
@@ -584,26 +580,43 @@
         e.preventDefault();
         
         const formData = new FormData(this);
-        const jadwalId = this.action.split('/').pop();
+        const actionUrl = this.action;
         
-        fetch(`/pelayanan/api/update-schedule/${jadwalId}`, {
-            method: 'POST',
+        // Get CSRF token
+        const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        
+        fetch(actionUrl, {
+            method: 'POST', // Always use POST
             body: formData,
             headers: {
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                'X-CSRF-TOKEN': csrfToken,
+                'Accept': 'application/json'
             }
         })
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
         .then(data => {
             if (data.success) {
-                location.reload(); // Refresh page to show changes
+                // Close modal
+                const modal = bootstrap.Modal.getInstance(document.getElementById('editModal'));
+                modal.hide();
+                
+                // Show success message
+                alert('Jadwal berhasil diperbarui!');
+                
+                // Reload page to show changes
+                location.reload();
             } else {
                 alert('Terjadi kesalahan: ' + (data.message || 'Unknown error'));
             }
         })
         .catch(error => {
             console.error('Error:', error);
-            alert('Terjadi kesalahan saat menyimpan perubahan.');
+            alert('Terjadi kesalahan saat menyimpan perubahan: ' + error.message);
         });
     });
     @endif

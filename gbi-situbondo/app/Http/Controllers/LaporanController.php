@@ -293,6 +293,9 @@ class LaporanController extends Controller
             })
             ->sortByDesc('jumlah')
             ->values();
+
+        // NEW: Kehadiran per minggu untuk chart
+        $kehadiranPerMinggu = $this->getKehadiranPerMinggu($pelaksanaanEvents, $bulan, $tahun);
         
         return view('laporan.kehadiran', compact(
             'attendanceRecords',
@@ -307,11 +310,50 @@ class LaporanController extends Controller
             'totalExpectedAttendance',
             'statusBreakdown',
             'kehadiranPerKegiatan',
+            'kehadiranPerMinggu', // NEW
             'kegiatanList',
             'pelaksanaanList',
             'kegiatan_id',
             'pelaksanaan_id'
         ));
+    }
+
+    /**
+     * NEW: Generate kehadiran per minggu data
+     */
+    private function getKehadiranPerMinggu($pelaksanaanEvents, $bulan, $tahun)
+    {
+        $kehadiranPerMinggu = [];
+        $startDate = Carbon::createFromDate($tahun, $bulan, 1);
+        $endDate = $startDate->copy()->endOfMonth();
+        
+        for ($week = 1; $week <= 5; $week++) {
+            $weekStart = ($week - 1) * 7 + 1;
+            $weekStartDate = Carbon::createFromDate($tahun, $bulan, $weekStart)->startOfDay();
+            $weekEndDate = $weekStartDate->copy()->addDays(6)->endOfDay();
+            
+            if ($weekStartDate->gt($endDate)) {
+                break;
+            }
+            
+            // Count attendance within this week
+            $weeklyCount = 0;
+            foreach ($pelaksanaanEvents as $pelaksanaan) {
+                $eventDate = Carbon::parse($pelaksanaan->tanggal_kegiatan);
+                if ($eventDate->between($weekStartDate, $weekEndDate)) {
+                    $weeklyCount += Kehadiran::where('id_pelaksanaan', $pelaksanaan->id_pelaksanaan)
+                        ->where('status', 'hadir')
+                        ->count();
+                }
+            }
+            
+            $kehadiranPerMinggu[] = [
+                'minggu' => "Minggu $week",
+                'jumlah' => $weeklyCount
+            ];
+        }
+        
+        return $kehadiranPerMinggu;
     }
 
     /**
@@ -347,23 +389,26 @@ class LaporanController extends Controller
                         'lokasi' => $pelaksanaan->lokasi
                     ];
                 } else {
-                    // Auto-assign as "tidak_hadir" for past events
+                    // PERBAIKAN: Auto-assign sebagai "tidak_hadir" untuk event yang sudah lewat
                     $eventDate = Carbon::parse($pelaksanaan->tanggal_kegiatan);
-                    $status = $eventDate->isPast() ? 'tidak_hadir' : 'tidak_hadir';
-                    
-                    $record = [
-                        'tanggal' => $pelaksanaan->tanggal_kegiatan,
-                        'nama_anggota' => $anggota->nama,
-                        'nama_keluarga' => $anggota->keluarga->nama_keluarga ?? null,
-                        'nama_kegiatan' => $pelaksanaan->kegiatan->nama_kegiatan,
-                        'tipe_kegiatan' => $pelaksanaan->kegiatan->tipe_kegiatan,
-                        'waktu_absensi' => null,
-                        'status' => $status,
-                        'lokasi' => $pelaksanaan->lokasi
-                    ];
+                    if ($eventDate->isPast()) {
+                        $record = [
+                            'tanggal' => $pelaksanaan->tanggal_kegiatan,
+                            'nama_anggota' => $anggota->nama,
+                            'nama_keluarga' => $anggota->keluarga->nama_keluarga ?? null,
+                            'nama_kegiatan' => $pelaksanaan->kegiatan->nama_kegiatan,
+                            'tipe_kegiatan' => $pelaksanaan->kegiatan->tipe_kegiatan,
+                            'waktu_absensi' => null,
+                            'status' => 'tidak_hadir',
+                            'lokasi' => $pelaksanaan->lokasi
+                        ];
+                    } else {
+                        // Skip future events without attendance
+                        continue;
+                    }
                 }
                 
-                // Apply status filter
+                // PERBAIKAN: Apply status filter yang benar
                 if ($statusFilter) {
                     if ($statusFilter === 'hadir' && $record['status'] !== 'hadir') {
                         continue;
@@ -771,7 +816,7 @@ class LaporanController extends Controller
         $period = $request->input('period', 6);
         $kegiatan_id = $request->input('kegiatan_id');
         $pelaksanaan_id = $request->input('pelaksanaan_id');
-        $status_filter = $request->input('status_filter'); // New filter
+        $status_filter = $request->input('status_filter'); // NEW: Status filter
         
         $startDate = Carbon::now()->subMonths($period);
         $endDate = Carbon::now();
@@ -802,7 +847,7 @@ class LaporanController extends Controller
         
         $events = $pelaksanaanEvents->get();
         
-        // Generate personal attendance records
+        // Generate personal attendance records with status filter
         $kehadiran = $this->generatePersonalAttendanceRecords($anggota, $events, $status_filter);
         
         // Calculate statistics
@@ -834,7 +879,6 @@ class LaporanController extends Controller
             'pelaksanaan_id'
         ));
     }
-
     /**
      * Generate personal attendance records for a specific member
      */
@@ -867,22 +911,25 @@ class LaporanController extends Controller
                     'keterangan' => $actualRecord->keterangan
                 ];
             } else {
-                // Auto-assign as "tidak_hadir" for past events
+                // PERBAIKAN: Auto-assign sebagai "tidak_hadir" untuk event yang sudah lewat
                 $eventDate = Carbon::parse($pelaksanaan->tanggal_kegiatan);
-                $status = $eventDate->isPast() ? 'tidak_hadir' : 'tidak_hadir';
-                
-                $record = [
-                    'tanggal' => $pelaksanaan->tanggal_kegiatan,
-                    'nama_kegiatan' => $pelaksanaan->kegiatan->nama_kegiatan,
-                    'tipe_kegiatan' => $pelaksanaan->kegiatan->tipe_kegiatan,
-                    'waktu_absensi' => null,
-                    'status' => $status,
-                    'lokasi' => $pelaksanaan->lokasi,
-                    'keterangan' => 'Auto-generated: Tidak hadir'
-                ];
+                if ($eventDate->isPast()) {
+                    $record = [
+                        'tanggal' => $pelaksanaan->tanggal_kegiatan,
+                        'nama_kegiatan' => $pelaksanaan->kegiatan->nama_kegiatan,
+                        'tipe_kegiatan' => $pelaksanaan->kegiatan->tipe_kegiatan,
+                        'waktu_absensi' => null,
+                        'status' => 'tidak_hadir',
+                        'lokasi' => $pelaksanaan->lokasi,
+                        'keterangan' => 'Auto-generated: Tidak hadir'
+                    ];
+                } else {
+                    // Skip future events without attendance
+                    continue;
+                }
             }
             
-            // Apply status filter
+            // PERBAIKAN: Apply status filter yang benar
             if ($statusFilter) {
                 if ($statusFilter === 'hadir' && $record['status'] !== 'hadir') {
                     continue;
@@ -1082,7 +1129,7 @@ class LaporanController extends Controller
         $period = $request->input('period', 6);
         $kegiatan_id = $request->input('kegiatan_id');
         $pelaksanaan_id = $request->input('pelaksanaan_id');
-        $status_filter = $request->input('status_filter'); // New filter
+        $status_filter = $request->input('status_filter'); // NEW: Status filter
         
         $startDate = Carbon::now()->subMonths($period);
         $endDate = Carbon::now();

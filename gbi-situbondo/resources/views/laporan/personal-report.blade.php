@@ -3,7 +3,6 @@
 @section('title', 'Laporan Kehadiran Pribadi')
 
 @section('styles')
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.css">
 <style>
     .report-header {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -49,39 +48,6 @@
         font-size: 0.95rem;
     }
     
-    .chart-container {
-        background: white;
-        border-radius: 15px;
-        padding: 25px;
-        margin-bottom: 20px;
-        box-shadow: 0 5px 15px rgba(0,0,0,0.08);
-        position: relative;
-        height: 400px;
-    }
-    
-    .chart-title {
-        font-size: 1.2rem;
-        font-weight: 600;
-        color: #333;
-        margin-bottom: 20px;
-        padding-bottom: 10px;
-        border-bottom: 2px solid #f8f9fa;
-    }
-    
-    .chart-wrapper {
-        position: relative;
-        height: 300px;
-        width: 100%;
-        overflow: hidden;
-    }
-    
-    .chart-wrapper canvas {
-        max-width: 100% !important;
-        max-height: 100% !important;
-        width: auto !important;
-        height: auto !important;
-    }
-    
     .attendance-list {
         background: white;
         border-radius: 15px;
@@ -95,31 +61,6 @@
         padding: 20px;
         margin-bottom: 20px;
         box-shadow: 0 5px 15px rgba(0,0,0,0.08);
-    }
-    
-    .period-selector {
-        display: flex;
-        gap: 10px;
-        margin-bottom: 20px;
-        flex-wrap: wrap;
-    }
-    
-    .period-btn {
-        padding: 8px 16px;
-        border: 2px solid #e9ecef;
-        background: white;
-        border-radius: 25px;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        font-size: 0.9rem;
-        font-weight: 500;
-    }
-    
-    .period-btn.active,
-    .period-btn:hover {
-        border-color: #667eea;
-        background: #667eea;
-        color: white;
     }
     
     .no-data-message {
@@ -335,28 +276,6 @@
             font-size: 2rem;
         }
         
-        .period-selector {
-            justify-content: center;
-        }
-        
-        .period-btn {
-            flex: 1;
-            min-width: 80px;
-        }
-        
-        .chart-container {
-            height: 350px;
-        }
-        
-        .chart-wrapper {
-            height: 250px;
-        }
-        
-        .chart-wrapper canvas {
-            max-width: 100% !important;
-            max-height: 100% !important;
-        }
-        
         .user-selector-form {
             flex-direction: column;
         }
@@ -487,6 +406,14 @@
                         </select>
                     </div>
                     <div>
+                        <label for="status_filter" class="form-label">Status Kehadiran</label>
+                        <select id="status_filter" name="status_filter" class="form-select">
+                            <option value="">-- Semua Status --</option>
+                            <option value="hadir" {{ request('status_filter') == 'hadir' ? 'selected' : '' }}>Hadir</option>
+                            <option value="tidak_hadir" {{ request('status_filter') == 'tidak_hadir' ? 'selected' : '' }}>Tidak Hadir</option>
+                        </select>
+                    </div>
+                    <div>
                         <button type="submit" class="btn btn-primary">
                             <i class="fas fa-search me-2"></i>Terapkan Filter
                         </button>
@@ -518,7 +445,7 @@
                     {{ $kehadiranPerBulan->count() > 0 ? round($kehadiranPerBulan->avg(), 1) : 0 }}
                 </div>
                 <div class="stats-description">
-                    Kehadiran bulanan {{ $canSelectUser && $selectedUserId ? $anggota->nama : 'Anda' }}
+                    Kegiatan bulanan {{ $canSelectUser && $selectedUserId ? $anggota->nama : 'Anda' }}
                 </div>
             </div>
         </div>
@@ -533,30 +460,7 @@
         </div>
     </div>
     
-    @if($totalKehadiran > 0)
-        <div class="row">
-            <div class="col-lg-6">
-                <div class="chart-container">
-                    <div class="chart-title">
-                        <i class="fas fa-chart-line me-2"></i>Tren Kehadiran per Bulan
-                    </div>
-                    <div class="chart-wrapper">
-                        <canvas id="monthlyChart"></canvas>
-                    </div>
-                </div>
-            </div>
-            <div class="col-lg-6">
-                <div class="chart-container">
-                    <div class="chart-title">
-                        <i class="fas fa-chart-pie me-2"></i>Kehadiran per Jenis Kegiatan
-                    </div>
-                    <div class="chart-wrapper">
-                        <canvas id="activityChart"></canvas>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
+    @if($totalKehadiran > 0 || $kehadiran->count() > 0)
         <div class="attendance-list">
             <div class="card-header bg-light">
                 <h5 class="mb-0">
@@ -580,11 +484,32 @@
                 @if(!$canSelectUser || !$selectedUserId)
                     <div class="export-buttons p-3">
                         <a href="{{ route('laporan.export', ['jenis' => 'personal-report', 'format' => 'pdf']) }}{{ request()->getQueryString() ? '?' . request()->getQueryString() : '' }}" 
-                           class="btn btn-danger btn-sm">
+                        class="btn btn-danger btn-sm">
                             <i class="fas fa-file-pdf me-1"></i>Export PDF
                         </a>
                         <a href="{{ route('laporan.export', ['jenis' => 'personal-report', 'format' => 'excel']) }}{{ request()->getQueryString() ? '?' . request()->getQueryString() : '' }}" 
-                           class="btn btn-success btn-sm">
+                        class="btn btn-success btn-sm">
+                            <i class="fas fa-file-excel me-1"></i>Export Excel
+                        </a>
+                    </div>
+                @else
+                    <div class="export-buttons p-3">
+                        @php
+                            $exportParams = [
+                                'user_id' => $selectedUserId,
+                                'period' => $period
+                            ];
+                            if($kegiatan_id) $exportParams['kegiatan_id'] = $kegiatan_id;
+                            if($pelaksanaan_id) $exportParams['pelaksanaan_id'] = $pelaksanaan_id;
+                            if(request('status_filter')) $exportParams['status_filter'] = request('status_filter');
+                            $exportQuery = http_build_query($exportParams);
+                        @endphp
+                        <a href="{{ route('laporan.export', ['jenis' => 'personal-report', 'format' => 'pdf']) }}?{{ $exportQuery }}" 
+                        class="btn btn-danger btn-sm">
+                            <i class="fas fa-file-pdf me-1"></i>Export PDF
+                        </a>
+                        <a href="{{ route('laporan.export', ['jenis' => 'personal-report', 'format' => 'excel']) }}?{{ $exportQuery }}" 
+                        class="btn btn-success btn-sm">
                             <i class="fas fa-file-excel me-1"></i>Export Excel
                         </a>
                     </div>
@@ -606,47 +531,58 @@
                         <tbody>
                             @foreach($kehadiran as $attendance)
                                 <tr>
-                                    <td>{{ \Carbon\Carbon::parse($attendance->waktu_absensi)->format('d-m-Y') }}</td>
+                                    <td>{{ \Carbon\Carbon::parse($attendance['tanggal'])->format('d-m-Y') }}</td>
                                     <td>
-                                        <strong>{{ $attendance->pelaksanaan->kegiatan->nama_kegiatan ?? 'Kegiatan Tidak Diketahui' }}</strong>
-                                        @if($attendance->pelaksanaan && $attendance->pelaksanaan->kegiatan)
+                                        <strong>{{ $attendance['nama_kegiatan'] }}</strong>
+                                        @if($attendance['tipe_kegiatan'])
                                             <br><small class="text-muted badge bg-light text-dark">
-                                                {{ ucfirst($attendance->pelaksanaan->kegiatan->tipe_kegiatan) }}
+                                                {{ ucfirst($attendance['tipe_kegiatan']) }}
                                             </small>
                                         @endif
                                     </td>
-                                    <td>{{ \Carbon\Carbon::parse($attendance->waktu_absensi)->format('H:i') }}</td>
                                     <td>
-                                        @switch($attendance->status)
+                                        @if($attendance['waktu_absensi'])
+                                            {{ \Carbon\Carbon::parse($attendance['waktu_absensi'])->format('H:i') }}
+                                        @else
+                                            <small class="text-muted">-</small>
+                                        @endif
+                                    </td>
+                                    <td>
+                                        @switch($attendance['status'])
                                             @case('hadir')
                                                 <span class="badge bg-success">
-                                                    <i class="fas fa-check me-1"></i>{{ ucfirst($attendance->status) }}
+                                                    <i class="fas fa-check me-1"></i>{{ ucfirst($attendance['status']) }}
                                                 </span>
                                                 @break
                                             @case('izin')
                                                 <span class="badge bg-warning text-dark">
-                                                    <i class="fas fa-user-clock me-1"></i>{{ ucfirst($attendance->status) }}
+                                                    <i class="fas fa-user-clock me-1"></i>{{ ucfirst($attendance['status']) }}
                                                 </span>
                                                 @break
                                             @case('sakit')
                                                 <span class="badge bg-info">
-                                                    <i class="fas fa-thermometer me-1"></i>{{ ucfirst($attendance->status) }}
+                                                    <i class="fas fa-thermometer me-1"></i>{{ ucfirst($attendance['status']) }}
                                                 </span>
                                                 @break
                                             @case('alfa')
                                                 <span class="badge bg-danger">
-                                                    <i class="fas fa-times me-1"></i>{{ ucfirst($attendance->status) }}
+                                                    <i class="fas fa-times me-1"></i>{{ ucfirst($attendance['status']) }}
+                                                </span>
+                                                @break
+                                            @case('tidak_hadir')
+                                                <span class="badge bg-secondary">
+                                                    <i class="fas fa-user-times me-1"></i>Tidak Hadir
                                                 </span>
                                                 @break
                                             @default
-                                                <span class="badge bg-secondary">{{ ucfirst($attendance->status) }}</span>
+                                                <span class="badge bg-secondary">{{ ucfirst($attendance['status']) }}</span>
                                         @endswitch
                                     </td>
                                     <td>
-                                        <small>{{ $attendance->pelaksanaan->lokasi ?? '-' }}</small>
+                                        <small>{{ $attendance['lokasi'] ?? '-' }}</small>
                                     </td>
                                     <td>
-                                        <small>{{ $attendance->keterangan ?? '-' }}</small>
+                                        <small>{{ $attendance['keterangan'] ?? '-' }}</small>
                                     </td>
                                 </tr>
                             @endforeach
@@ -675,11 +611,10 @@
 @endsection
 
 @section('scripts')
-<script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Initialize DataTable
-    @if($totalKehadiran > 0)
+    @if($totalKehadiran > 0 || $kehadiran->count() > 0)
         const kehadiranTable = new simpleDatatables.DataTable("#kehadiranTable", {
             searchable: true,
             sortable: true,
@@ -699,145 +634,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 bottom: "{info}{pager}"
             }
         });
-    @endif
-    
-    // Variabel untuk menyimpan instance chart
-    let monthlyChart = null;
-    let activityChart = null;
-    
-    // Function untuk menghancurkan chart yang sudah ada
-    function destroyExistingCharts() {
-        if (monthlyChart) {
-            monthlyChart.destroy();
-            monthlyChart = null;
-        }
-        if (activityChart) {
-            activityChart.destroy();
-            activityChart = null;
-        }
-    }
-    
-    @if($totalKehadiran > 0)
-        // Monthly attendance chart
-        const monthlyCtx = document.getElementById('monthlyChart');
-        if (monthlyCtx) {
-            const ctx = monthlyCtx.getContext('2d');
-            const monthlyData = @json($kehadiranPerBulan);
-            
-            const monthlyLabels = [];
-            const monthlyValues = [];
-            
-            // Generate labels for all months in the period
-            const startDate = new Date('{{ $startDate->format('Y-m-d') }}');
-            const endDate = new Date('{{ $endDate->format('Y-m-d') }}');
-            
-            let currentDate = new Date(startDate);
-            currentDate.setDate(1); // Set to first day of month
-            
-            while (currentDate <= endDate) {
-                const monthKey = currentDate.getFullYear() + '-' + String(currentDate.getMonth() + 1).padStart(2, '0');
-                const monthLabel = currentDate.toLocaleDateString('id-ID', { month: 'short', year: 'numeric' });
-                
-                monthlyLabels.push(monthLabel);
-                monthlyValues.push(monthlyData[monthKey] || 0);
-                
-                // Move to next month
-                currentDate.setMonth(currentDate.getMonth() + 1);
-            }
-            
-            monthlyChart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: monthlyLabels,
-                    datasets: [{
-                        label: 'Kehadiran',
-                        data: monthlyValues,
-                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
-                        borderColor: 'rgba(102, 126, 234, 1)',
-                        borderWidth: 3,
-                        fill: true,
-                        tension: 0.4,
-                        pointBackgroundColor: 'rgba(102, 126, 234, 1)',
-                        pointBorderColor: '#fff',
-                        pointBorderWidth: 2,
-                        pointRadius: 6
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            display: false
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            ticks: {
-                                precision: 0
-                            },
-                            grid: {
-                                color: 'rgba(0,0,0,0.05)'
-                            }
-                        },
-                        x: {
-                            grid: {
-                                display: false
-                            }
-                        }
-                    }
-                }
-            });
-        }
-        
-        // Activity type chart
-        const activityCtx = document.getElementById('activityChart');
-        if (activityCtx) {
-            const ctx = activityCtx.getContext('2d');
-            const activityData = @json($kehadiranPerKegiatan);
-            
-            const activityLabels = Object.keys(activityData);
-            const activityValues = Object.values(activityData);
-            
-            // Generate colors for activities
-            const colors = [
-                'rgba(102, 126, 234, 0.8)',
-                'rgba(118, 75, 162, 0.8)',
-                'rgba(255, 99, 132, 0.8)',
-                'rgba(54, 162, 235, 0.8)',
-                'rgba(255, 205, 86, 0.8)',
-                'rgba(75, 192, 192, 0.8)',
-                'rgba(153, 102, 255, 0.8)',
-                'rgba(255, 159, 64, 0.8)'
-            ];
-            
-            activityChart = new Chart(ctx, {
-                type: 'doughnut',
-                data: {
-                    labels: activityLabels,
-                    datasets: [{
-                        data: activityValues,
-                        backgroundColor: colors.slice(0, activityLabels.length),
-                        borderWidth: 2,
-                        borderColor: '#fff'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'bottom',
-                            labels: {
-                                padding: 20,
-                                usePointStyle: true
-                            }
-                        }
-                    }
-                }
-            });
-        }
     @endif
     
     // Dependent dropdown: Pelaksanaan based on Kegiatan
@@ -870,11 +666,6 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
     @endif
-    
-    // Cleanup saat halaman akan ditinggalkan
-    window.addEventListener('beforeunload', function() {
-        destroyExistingCharts();
-    });
 });
 </script>
 @endsection
