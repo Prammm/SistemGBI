@@ -997,10 +997,20 @@ class PelayananController extends Controller
         }
         
         $validator = Validator::make($request->all(), [
-            'generation_type' => 'required|in:single,bulk_monthly',
+            'generation_type' => 'required|in:single,bulk_monthly,recurring_events', // UPDATED: Added recurring_events
             'id_pelaksanaan' => 'required_if:generation_type,single|array',
             'id_pelaksanaan.*' => 'exists:pelaksanaan_kegiatan,id_pelaksanaan',
             'month_year' => 'required_if:generation_type,bulk_monthly|date_format:Y-m',
+            // NEW: Recurring events validation
+            'recurring_events' => 'required_if:generation_type,recurring_events|array',
+            'recurring_events.*' => 'exists:pelaksanaan_kegiatan,id_pelaksanaan',
+            'recurring_period' => 'required_if:generation_type,recurring_events|in:1_month,2_months,3_months,6_months,custom',
+            'recurring_start_date' => 'required_if:recurring_period,custom|date',
+            'recurring_end_date' => 'required_if:recurring_period,custom|date|after:recurring_start_date',
+            'recurring_max_services' => 'sometimes|integer|min:1|max:10',
+            'skip_existing_recurring' => 'sometimes|boolean',
+            'skip_past_events' => 'sometimes|boolean',
+            // Existing validation
             'positions' => 'required|array',
             'positions.*' => 'required|string',
             'anggota' => 'required|array',
@@ -1021,8 +1031,10 @@ class PelayananController extends Controller
         try {
             if ($request->generation_type === 'single') {
                 $result = $this->generateSingleSchedule($request);
-            } else {
+            } elseif ($request->generation_type === 'bulk_monthly') {
                 $result = $this->generateMonthlySchedule($request);
+            } else { // recurring_events
+                $result = $this->generateRecurringEventsSchedule($request); // NEW METHOD
             }
             
             DB::commit();
@@ -1039,7 +1051,328 @@ class PelayananController extends Controller
                 ->withInput();
         }
     }
+
+    /**
+    * NEW: Generate recurring events schedule
+    */
+    private function generateRecurringEventsSchedule(Request $request)
+    {
+        $selectedKegiatanIds = $request->recurring_events; // These are actually kegiatan IDs now
+        $positions = $request->positions;
+        $selectedAnggota = $request->anggota;
+        $algorithm = $request->algorithm;
+        $maxServicesPerMonth = $request->recurring_max_services ?? 3;
+        $skipExisting = $request->skip_existing_recurring ?? true; // Default to true
+        $skipPast = $request->skip_past_events ?? true; // Default to true
+        
+        Log::info("Generating recurring events schedule", [
+            'kegiatan_ids' => $selectedKegiatanIds,
+            'positions' => $positions,
+            'selected_anggota' => $selectedAnggota,
+            'skip_existing' => $skipExisting,
+            'skip_past' => $skipPast
+        ]);
+        
+        // FIXED: Get kegiatan, then find their pelaksanaan
+        $selectedKegiatan = Kegiatan::whereIn('id_kegiatan', $selectedKegiatanIds)->get();
+        
+        if ($selectedKegiatan->isEmpty()) {
+            throw new \Exception('Kegiatan tidak ditemukan.');
+        }
+        
+        $totalScheduled = 0;
+        $totalSkipped = 0;
+        $conflicts = [];
+        $eventsProcessed = 0;
+        
+        // FIXED: Max 1 month from today
+        $startDate = Carbon::now()->startOfDay();
+        $endDate = Carbon::now()->addMonth()->endOfDay();
+        
+        // Track member workload for the month
+        $memberWorkload = [];
+        foreach ($selectedAnggota as $anggotaId) {
+            $memberWorkload[$anggotaId] = 0;
+        }
+        
+        foreach ($selectedKegiatan as $kegiatan) {
+            Log::info("Processing kegiatan: {$kegiatan->nama_kegiatan}");
+            
+            // FIXED: Find ALL pelaksanaan for this kegiatan in the next month (present + future only)
+            $pelaksanaanList = PelaksanaanKegiatan::where('id_kegiatan', $kegiatan->id_kegiatan)
+                ->where('tanggal_kegiatan', '>=', $startDate->format('Y-m-d')) // TODAY and FUTURE only
+                ->where('tanggal_kegiatan', '<=', $endDate->format('Y-m-d'))
+                ->orderBy('tanggal_kegiatan')
+                ->get();
+            
+            Log::info("Found {$pelaksanaanList->count()} pelaksanaan for {$kegiatan->nama_kegiatan} in next month");
+            
+            foreach ($pelaksanaanList as $pelaksanaan) {
+                $eventDate = Carbon::parse($pelaksanaan->tanggal_kegiatan);
+                
+                // FIXED: Skip past events (should not happen with our query, but double check)
+                if ($skipPast && $eventDate->isPast()) {
+                    Log::info("Skipping past event: {$pelaksanaan->tanggal_kegiatan}");
+                    $totalSkipped++;
+                    continue;
+                }
+                
+                // FIXED: Skip if already has schedule and skipExisting is enabled
+                if ($skipExisting && $this->hasExistingSchedule($pelaksanaan->id_pelaksanaan)) {
+                    Log::info("Skipping existing schedule for pelaksanaan: {$pelaksanaan->id_pelaksanaan}");
+                    $totalSkipped++;
+                    continue;
+                }
+                
+                // FIXED: Only delete existing jadwal for THIS SPECIFIC pelaksanaan that we're going to replace
+                if (!$skipExisting) {
+                    JadwalPelayanan::where('id_pelaksanaan', $pelaksanaan->id_pelaksanaan)->delete();
+                    Log::info("Deleted existing schedule for pelaksanaan: {$pelaksanaan->id_pelaksanaan}");
+                }
+                
+                // Get available anggota (filter by monthly workload)
+                $availableAnggota = Anggota::with(['spesialisasi', 'jadwalPelayanan'])
+                    ->whereIn('id_anggota', $selectedAnggota)
+                    ->get()
+                    ->filter(function($a) use ($memberWorkload, $maxServicesPerMonth) {
+                        return ($memberWorkload[$a->id_anggota] ?? 0) < $maxServicesPerMonth;
+                    });
+                
+                if ($availableAnggota->isEmpty()) {
+                    $conflicts[] = "Semua anggota sudah mencapai batas maksimal untuk {$kegiatan->nama_kegiatan} pada {$pelaksanaan->tanggal_kegiatan}";
+                    $totalSkipped++;
+                    continue;
+                }
+                
+                $result = $this->executeSchedulingAlgorithm(
+                    $availableAnggota, 
+                    $positions, 
+                    $pelaksanaan, 
+                    $algorithm,
+                    $request,
+                    $memberWorkload
+                );
+                
+                // Update workload tracking
+                foreach ($result['scheduled_members'] as $anggotaId) {
+                    $memberWorkload[$anggotaId] = ($memberWorkload[$anggotaId] ?? 0) + 1;
+                }
+                
+                $totalScheduled += $result['scheduled'];
+                $totalSkipped += $result['skipped'];
+                $conflicts = array_merge($conflicts, $result['conflicts']);
+                $eventsProcessed++;
+                
+                Log::info("Processed pelaksanaan {$pelaksanaan->id_pelaksanaan}: {$result['scheduled']} scheduled, {$result['skipped']} skipped");
+            }
+        }
+        
+        $message = "Jadwal berulang berhasil digenerate untuk {$totalScheduled} posisi dalam {$eventsProcessed} kegiatan (1 bulan ke depan)";
+        $details = '';
+        
+        if ($totalSkipped > 0) {
+            $details .= "⚠️ {$totalSkipped} posisi/kegiatan dilewati. ";
+        }
+        
+        if (!empty($conflicts)) {
+            $details .= "⚠️ " . count(array_unique($conflicts)) . " konflik ditemukan.";
+        }
+        
+        return [
+            'message' => $message,
+            'details' => $details
+        ];
+    }
+
     
+    /**
+    * Calculate period dates for recurring events
+    */
+    private function calculateRecurringPeriod(Request $request)
+    {
+        $now = Carbon::now();
+        
+        switch ($request->recurring_period) {
+            case '1_month':
+                return [
+                    'start' => $now->copy()->startOfDay(),
+                    'end' => $now->copy()->addMonth()->endOfDay()
+                ];
+            case '2_months':
+                return [
+                    'start' => $now->copy()->startOfDay(),
+                    'end' => $now->copy()->addMonths(2)->endOfDay()
+                ];
+            case '3_months':
+                return [
+                    'start' => $now->copy()->startOfDay(),
+                    'end' => $now->copy()->addMonths(3)->endOfDay()
+                ];
+            case '6_months':
+                return [
+                    'start' => $now->copy()->startOfDay(),
+                    'end' => $now->copy()->addMonths(6)->endOfDay()
+                ];
+            case 'custom':
+                return [
+                    'start' => Carbon::parse($request->recurring_start_date)->startOfDay(),
+                    'end' => Carbon::parse($request->recurring_end_date)->endOfDay()
+                ];
+            default:
+                return [
+                    'start' => $now->copy()->startOfDay(),
+                    'end' => $now->copy()->addMonths(3)->endOfDay()
+                ];
+        }
+    }
+
+    /**
+    * Get child events for recurring parent in specified period
+    */
+    private function getRecurringChildEvents($parentEvent, $startDate, $endDate, $skipPast = true)
+    {
+        $query = PelaksanaanKegiatan::where('parent_id', $parentEvent->id_pelaksanaan)
+            ->whereBetween('tanggal_kegiatan', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
+            ->orderBy('tanggal_kegiatan');
+        
+        // Also include the parent if it falls within the period
+        $allEvents = collect();
+        
+        // Check if parent event is in the period
+        $parentDate = Carbon::parse($parentEvent->tanggal_kegiatan);
+        if ($parentDate->between($startDate, $endDate)) {
+            if (!$skipPast || !$parentDate->isPast()) {
+                $allEvents->push($parentEvent);
+            }
+        }
+        
+        // Add child events
+        $childEvents = $query->get();
+        $allEvents = $allEvents->merge($childEvents);
+        
+        return $allEvents->sortBy('tanggal_kegiatan');
+    }
+
+    /**
+    * Check if pelaksanaan already has existing schedule
+    */
+    private function hasExistingSchedule($pelaksanaanId)
+    {
+        return JadwalPelayanan::where('id_pelaksanaan', $pelaksanaanId)->exists();
+    }
+
+    /**
+    * UPDATED: API endpoint for recurring events
+    */
+    public function getRecurringEvents()
+    {
+        try {
+            // FIXED: Get kegiatan that have recurring pelaksanaan, not pelaksanaan directly
+            $recurringKegiatan = Kegiatan::whereHas('pelaksanaan', function($q) {
+                $q->where('is_recurring', true)
+                ->whereNull('parent_id') // Only parent events
+                ->where(function($subQ) {
+                    // Either no end date set, or end date is in the future
+                    $subQ->whereNull('recurring_end_date')
+                        ->orWhere('recurring_end_date', '>=', now()->format('Y-m-d'));
+                });
+            })
+            ->with(['pelaksanaan' => function($q) {
+                $q->where('is_recurring', true)
+                ->whereNull('parent_id')
+                ->where(function($subQ) {
+                    $subQ->whereNull('recurring_end_date')
+                        ->orWhere('recurring_end_date', '>=', now()->format('Y-m-d'));
+                });
+            }])
+            ->where('tipe_kegiatan', 'ibadah') // Focus on ibadah only
+            ->get()
+            ->map(function($kegiatan) {
+                $dayNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+                
+                // Get the first (usually only) recurring pelaksanaan for this kegiatan
+                $recurringPelaksanaan = $kegiatan->pelaksanaan->first();
+                
+                if (!$recurringPelaksanaan) return null;
+                
+                // Count future pelaksanaan for this kegiatan
+                $futureCount = PelaksanaanKegiatan::where('id_kegiatan', $kegiatan->id_kegiatan)
+                    ->where('tanggal_kegiatan', '>=', now()->format('Y-m-d'))
+                    ->where('tanggal_kegiatan', '<=', now()->addMonth()->format('Y-m-d'))
+                    ->count();
+                
+                return [
+                    'id' => $kegiatan->id_kegiatan, // FIXED: Return kegiatan ID, not pelaksanaan ID
+                    'name' => $kegiatan->nama_kegiatan,
+                    'schedule' => $recurringPelaksanaan->recurring_type === 'weekly' ? 'Mingguan' : 'Bulanan',
+                    'day' => $recurringPelaksanaan->recurring_day ?? Carbon::parse($recurringPelaksanaan->tanggal_kegiatan)->dayOfWeek,
+                    'time' => Carbon::parse($recurringPelaksanaan->jam_mulai)->format('H:i') . ' - ' . 
+                            Carbon::parse($recurringPelaksanaan->jam_selesai)->format('H:i'),
+                    'end_date' => $recurringPelaksanaan->recurring_end_date ? 
+                                Carbon::parse($recurringPelaksanaan->recurring_end_date)->format('d/m/Y') : null,
+                    'location' => $recurringPelaksanaan->lokasi,
+                    'day_name' => $dayNames[$recurringPelaksanaan->recurring_day ?? Carbon::parse($recurringPelaksanaan->tanggal_kegiatan)->dayOfWeek],
+                    'next_month_count' => $futureCount, // How many occurrences in next month
+                    'description' => "Kegiatan {$kegiatan->nama_kegiatan} - {$futureCount} pelaksanaan dalam 1 bulan ke depan"
+                ];
+            })
+            ->filter() // Remove null values
+            ->values(); // Reset array keys
+                
+            return response()->json(['events' => $recurringKegiatan]);
+            
+        } catch (\Exception $e) {
+            Log::error('Error getting recurring events: ' . $e->getMessage());
+            return response()->json(['events' => [], 'error' => 'Failed to load recurring events']);
+        }
+    }
+
+    /**
+    * Get next occurrence date for recurring event
+    */
+    private function getNextOccurrence($event)
+    {
+        $now = Carbon::now();
+        $eventDate = Carbon::parse($event->tanggal_kegiatan);
+        
+        if ($eventDate->gte($now)) {
+            return $eventDate->format('d/m/Y');
+        }
+        
+        // Find next occurrence
+        $nextDate = $eventDate->copy();
+        
+        while ($nextDate->lt($now)) {
+            if ($event->recurring_type === 'weekly') {
+                $nextDate->addWeek();
+            } elseif ($event->recurring_type === 'monthly') {
+                $nextDate->addMonth();
+            } else {
+                break;
+            }
+        }
+        
+        // Check if within recurring_end_date
+        if ($event->recurring_end_date && $nextDate->gt(Carbon::parse($event->recurring_end_date))) {
+            return 'Berakhir';
+        }
+        
+        return $nextDate->format('d/m/Y');
+    }
+
+    /**
+    * Count future events for recurring parent
+    */
+    private function countFutureEvents($event)
+    {
+        $threeMonthsLater = Carbon::now()->addMonths(3);
+        
+        return PelaksanaanKegiatan::where('parent_id', $event->id_pelaksanaan)
+            ->where('tanggal_kegiatan', '>=', Carbon::now()->format('Y-m-d'))
+            ->where('tanggal_kegiatan', '<=', $threeMonthsLater->format('Y-m-d'))
+            ->count();
+    }
+
     /**
      * Generate single event schedule - IMPROVED
      */
@@ -1053,11 +1386,22 @@ class PelayananController extends Controller
         $totalScheduled = 0;
         $totalSkipped = 0;
         $conflicts = [];
+        $today = Carbon::now()->startOfDay();
         
         foreach ($pelaksanaanIds as $pelaksanaanId) {
             $pelaksanaan = PelaksanaanKegiatan::with('kegiatan')->findOrFail($pelaksanaanId);
             
-            // Delete existing jadwal
+            $eventDate = Carbon::parse($pelaksanaan->tanggal_kegiatan);
+            
+            // FIXED: Skip past events
+            if ($eventDate->isPast()) {
+                Log::info("Skipping past event in single: {$pelaksanaan->tanggal_kegiatan}");
+                $totalSkipped++;
+                $conflicts[] = "Event {$pelaksanaan->kegiatan->nama_kegiatan} pada {$pelaksanaan->tanggal_kegiatan} sudah lewat";
+                continue;
+            }
+            
+            // Delete existing jadwal only for this specific pelaksanaan
             JadwalPelayanan::where('id_pelaksanaan', $pelaksanaan->id_pelaksanaan)->delete();
             
             $anggota = Anggota::with(['spesialisasi', 'jadwalPelayanan'])
@@ -1077,7 +1421,7 @@ class PelayananController extends Controller
             $conflicts = array_merge($conflicts, $result['conflicts']);
         }
         
-        $message = "Jadwal berhasil digenerate untuk {$totalScheduled} posisi";
+        $message = "Jadwal berhasil digenerate untuk {$totalScheduled} posisi (masa sekarang dan depan)";
         $details = '';
         
         if ($totalSkipped > 0) {
@@ -1103,22 +1447,38 @@ class PelayananController extends Controller
         $startDate = $monthYear->copy()->startOfMonth();
         $endDate = $monthYear->copy()->endOfMonth();
         
+        // FIXED: If selected month is current month, start from TODAY
+        $today = Carbon::now()->startOfDay();
+        if ($startDate->isSameMonth($today)) {
+            $startDate = $today; // Start from today, not beginning of month
+            Log::info("Current month selected, starting from today: {$startDate->format('Y-m-d')}");
+        }
+        
+        Log::info("Generating monthly schedule", [
+            'start_date' => $startDate->format('Y-m-d'),
+            'end_date' => $endDate->format('Y-m-d')
+        ]);
+        
         $pelaksanaan = PelaksanaanKegiatan::with('kegiatan')
             ->whereHas('kegiatan', function($q) {
                 $q->where('tipe_kegiatan', 'ibadah');
             })
-            ->whereBetween('tanggal_kegiatan', [$startDate, $endDate])
+            ->where('tanggal_kegiatan', '>=', $startDate->format('Y-m-d')) // FIXED: Only present and future
+            ->where('tanggal_kegiatan', '<=', $endDate->format('Y-m-d'))
             ->orderBy('tanggal_kegiatan')
             ->get();
             
         if ($pelaksanaan->isEmpty()) {
-            throw new \Exception('Tidak ada kegiatan ibadah pada bulan tersebut.');
+            throw new \Exception('Tidak ada kegiatan ibadah pada periode tersebut (masa sekarang dan depan).');
         }
+        
+        Log::info("Found {$pelaksanaan->count()} pelaksanaan for monthly generation");
         
         $positions = $request->positions;
         $selectedAnggota = $request->anggota;
         $algorithm = $request->algorithm;
         $maxServicesPerMonth = $request->max_services_per_month ?? 3;
+        $skipExisting = $request->skip_existing ?? true;
         
         // Track member workload for the month
         $memberWorkload = [];
@@ -1131,14 +1491,33 @@ class PelayananController extends Controller
         $conflicts = [];
         
         foreach ($pelaksanaan as $p) {
-            // Delete existing jadwal
-            JadwalPelayanan::where('id_pelaksanaan', $p->id_pelaksanaan)->delete();
+            $eventDate = Carbon::parse($p->tanggal_kegiatan);
+            
+            // FIXED: Double check - skip past events
+            if ($eventDate->isPast()) {
+                Log::info("Skipping past event in monthly: {$p->tanggal_kegiatan}");
+                $totalSkipped++;
+                continue;
+            }
+            
+            // FIXED: Skip if already has schedule and skipExisting is enabled
+            if ($skipExisting && $this->hasExistingSchedule($p->id_pelaksanaan)) {
+                Log::info("Skipping existing schedule for monthly pelaksanaan: {$p->id_pelaksanaan}");
+                $totalSkipped++;
+                continue;
+            }
+            
+            // FIXED: Only delete if we're going to replace
+            if (!$skipExisting) {
+                JadwalPelayanan::where('id_pelaksanaan', $p->id_pelaksanaan)->delete();
+                Log::info("Deleted existing schedule for monthly pelaksanaan: {$p->id_pelaksanaan}");
+            }
             
             $anggota = Anggota::with(['spesialisasi', 'jadwalPelayanan'])
                 ->whereIn('id_anggota', $selectedAnggota)
                 ->get()
                 ->filter(function($a) use ($memberWorkload, $maxServicesPerMonth) {
-                    return $memberWorkload[$a->id_anggota] < $maxServicesPerMonth;
+                    return ($memberWorkload[$a->id_anggota] ?? 0) < $maxServicesPerMonth;
                 });
             
             $result = $this->executeSchedulingAlgorithm(
@@ -1160,7 +1539,7 @@ class PelayananController extends Controller
             $conflicts = array_merge($conflicts, $result['conflicts']);
         }
         
-        $message = "Jadwal bulanan berhasil digenerate untuk {$totalScheduled} posisi dalam {$pelaksanaan->count()} kegiatan";
+        $message = "Jadwal bulanan berhasil digenerate untuk {$totalScheduled} posisi dalam {$pelaksanaan->count()} kegiatan (masa sekarang dan depan)";
         $details = '';
         
         if ($totalSkipped > 0) {

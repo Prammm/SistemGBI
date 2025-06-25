@@ -85,32 +85,8 @@ Route::middleware(['auth'])->group(function () {
         // Advanced Generator
         Route::get('/generator', [PelayananController::class, 'showGenerator'])->name('generator');
         Route::post('/generate', [PelayananController::class, 'generateSchedule'])->name('generate');
-        Route::get('/api/recurring-events', function() {
-            $recurringEvents = \App\Models\PelaksanaanKegiatan::with('kegiatan')
-                ->where('is_recurring', true)
-                ->whereNull('parent_id') // Only parent events
-                ->whereHas('kegiatan', function($q) {
-                    $q->where('tipe_kegiatan', 'ibadah'); // Focus on ibadah only
-                })
-                ->where('tanggal_kegiatan', '>=', now()->format('Y-m-d'))
-                ->orderBy('tanggal_kegiatan')
-                ->get()
-                ->map(function($event) {
-                    return [
-                        'id' => $event->id_pelaksanaan,
-                        'name' => $event->kegiatan->nama_kegiatan,
-                        'schedule' => $event->recurring_type === 'weekly' ? 'Mingguan' : 'Bulanan',
-                        'day' => $event->recurring_day,
-                        'time' => \Carbon\Carbon::parse($event->jam_mulai)->format('H:i') . ' - ' . 
-                                 \Carbon\Carbon::parse($event->jam_selesai)->format('H:i'),
-                        'end_date' => $event->recurring_end_date ? 
-                                     \Carbon\Carbon::parse($event->recurring_end_date)->format('d/m/Y') : null,
-                        'location' => $event->lokasi
-                    ];
-                });
-                
-            return response()->json(['events' => $recurringEvents]);
-        })->name('api.recurring-events');
+        Route::get('/api/recurring-events', [PelayananController::class, 'getRecurringEvents'])
+            ->name('api.recurring-events');
         
         // Replacement management dashboard
         Route::get('/replacements', [PelayananController::class, 'replacementDashboard'])
